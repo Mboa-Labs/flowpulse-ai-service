@@ -9,7 +9,7 @@ class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_prefix="FLOWPULSE_")
 
     ollama_url: str = "http://localhost:11434"
-    llm_model: str = "qwen2.5:14b"
+    llm_model: str = "qwen2.5:7b"  # 14b sur un serveur avec carte graphique
     embed_model: str = "nomic-embed-text"
     chroma_dir: Path = Path(__file__).resolve().parents[2] / "flowpulse-knowledge-base" / "chroma"
     backend_url: str = "http://localhost:8080"

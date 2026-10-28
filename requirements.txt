@@ -6,3 +6,5 @@ ollama>=0.4
 pymupdf>=1.25
 httpx>=0.28
 pytest>=8.3
+langchain-core>=0.3,<2
+langchain-ollama>=0.2,<2

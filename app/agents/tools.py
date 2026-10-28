@@ -1,0 +1,77 @@
+"""Outils mis à disposition de l'Orchestrator (repris des agents écrits par Martin).
+
+Changement clé : la réaffectation n'est plus exécutée par l'agent. L'outil crée une
+recommandation PROPOSÉE, vérifiée par l'agent Politique, que l'opérateur valide ou rejette.
+"""
+
+from __future__ import annotations
+
+import time
+
+from langchain_core.tools import tool
+
+from app import kb
+from app.agents import data, optimizer, store
+
+
+@tool
+def get_traffic_data(zone_name: str) -> str:
+    """Récupère les métriques de trafic (vitesse, congestion, flux) pour une zone géographique."""
+    started = time.perf_counter()
+    t = data.traffic(zone_name)
+    out = (
+        f"Aucune donnée pour la zone {zone_name}. Zones disponibles : {', '.join(data.zones())}."
+        if t is None
+        else f"Zone: {zone_name} | Vitesse: {t['vitesse_moyenne']} km/h | Congestion: {t['niveau_congestion']}% | Flux: {t['vehicules_par_heure']} véh/h"
+    )
+    store.record("outil", "get_traffic_data", zone_name, out, started)
+    return out
+
+
+@tool
+def get_bus_fleet_status(zone_name: str) -> str:
+    """Récupère l'état des bus disponibles en réserve et les lignes actives pour une zone."""
+    started = time.perf_counter()
+    f = data.fleet(zone_name)
+    out = (
+        f"Aucune information de flotte pour la zone {zone_name}."
+        if f is None
+        else f"Zone: {zone_name} | Lignes: {', '.join(f['lignes_actives'])} | Bus en réserve: {f['bus_en_reserve']} | Capacité: {f['capacite']} places"
+    )
+    store.record("outil", "get_bus_fleet_status", zone_name, out, started)
+    return out
+
+
+@tool
+def propose_fleet_reallocation(zone_name: str, target_line: str, num_bus_to_add: int) -> str:
+    """Propose de déplacer des bus de la réserve vers une ligne en tension. La proposition est
+    vérifiée réglementairement puis soumise à l'opérateur ; elle n'est jamais appliquée automatiquement."""
+    try:
+        reco = optimizer.propose(zone_name, target_line, num_bus_to_add)
+    except ValueError as e:
+        return str(e)
+    sources = "; ".join(f"{c['reference'] or c['titre']} {c['article']}".strip() for c in reco.citations) or "aucun texte applicable"
+    return (
+        f"Recommandation {reco.id} créée (statut {reco.statut}, en attente de validation par l'opérateur) : "
+        f"{reco.description} Conformité : {reco.conformite}. {reco.justification} Sources : {sources}."
+    )
+
+
+@tool
+def search_regulations(question: str) -> str:
+    """Cherche dans les textes réglementaires (lois, décrets, stratégies) les passages pertinents pour une question."""
+    started = time.perf_counter()
+    try:
+        passages = kb.search(question, n=4)
+    except Exception as e:
+        passages = []
+        store.record("outil", "search_regulations", question, f"indisponible : {e}", started)
+    if not passages:
+        return "Aucun texte trouvé dans la base de connaissances."
+    sources = [{"doc_id": p.doc_id, "titre": p.titre, "reference": p.reference, "article": p.article, "score": p.score} for p in passages]
+    store.record("outil", "search_regulations", question, f"{len(passages)} passages", started, sources)
+    return "\n".join(f"- {p.titre} ({p.reference}) {p.article} : {p.texte[:400]}" for p in passages)
+
+
+TOOLS = [get_traffic_data, get_bus_fleet_status, propose_fleet_reallocation, search_regulations]
+TOOL_MAP = {t.name: t for t in TOOLS}
