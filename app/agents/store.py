@@ -60,6 +60,7 @@ class Gap:
 TRACES: dict[str, Trace] = {}
 RECOMMENDATIONS: dict[str, Recommendation] = {}
 GAPS: dict[str, Gap] = {}
+SIMULATIONS: dict[str, dict] = {}
 
 _current: ContextVar[Optional[Trace]] = ContextVar("current_trace", default=None)
 
@@ -91,3 +92,4 @@ def reset() -> None:
     TRACES.clear()
     RECOMMENDATIONS.clear()
     GAPS.clear()
+    SIMULATIONS.clear()

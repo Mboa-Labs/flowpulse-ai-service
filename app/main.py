@@ -1,7 +1,7 @@
 """Service IA FlowPulse : pipeline de données, modèles, agents et base de connaissances.
 
 Routes : santé, recherche dans la base de connaissances, superviseur (Orchestrator),
-surveillance (Watcher + Optimizer + Policy), recommandations, traces et manques réglementaires.
+surveillance (Watcher + Optimizer + Policy), simulation What-If, recommandations, traces et manques réglementaires.
 """
 
 from dataclasses import asdict
@@ -9,10 +9,10 @@ from typing import Literal, Optional
 
 import httpx
 from fastapi import FastAPI, HTTPException, Query
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from app import kb
-from app.agents import data, orchestrator, store, watcher
+from app.agents import data, orchestrator, simulator, store, watcher
 from app.config import settings
 
 app = FastAPI(title="FlowPulse AI service", version="0.1.0")
@@ -61,6 +61,18 @@ class Question(BaseModel):
     question: str
 
 
+HEURE = r"^([01]\d|2[0-3]):[0-5]\d$"
+
+
+class ScenarioIn(BaseModel):
+    type: Literal["fermeture", "evenement", "renfort"]
+    zone: str
+    debut: str = Field("08:00", pattern=HEURE)
+    fin: str = Field("12:00", pattern=HEURE)
+    participants: int = Field(0, ge=0, le=200_000)
+    nb_bus: int = Field(0, ge=0, le=50)
+
+
 class Decision(BaseModel):
     decision: Literal["appliquer", "rejeter"]
     motif: Optional[str] = None
@@ -93,6 +105,28 @@ def run_watcher() -> dict:
 def last_watcher_run() -> dict:
     """Résultat du dernier passage de surveillance (pour l'affichage des alertes)."""
     return {"trace_id": watcher.LAST_RUN["trace_id"], "alertes": [asdict(a) for a in watcher.LAST_RUN["alertes"]]}
+
+
+@app.post("/ai/simulations")
+def simulate(body: ScenarioIn) -> dict:
+    """Simulation What-If : effet d'un scénario sur le trafic et mesures vérifiées, sans rien appliquer."""
+    try:
+        return simulator.run(simulator.Scenario(**body.model_dump()))
+    except ValueError as e:
+        raise HTTPException(422, str(e))
+
+
+@app.get("/ai/simulations")
+def list_simulations() -> list[dict]:
+    return sorted(store.SIMULATIONS.values(), key=lambda s: s["date"], reverse=True)
+
+
+@app.get("/ai/simulations/{sim_id}")
+def get_simulation(sim_id: str) -> dict:
+    sim = store.SIMULATIONS.get(sim_id)
+    if sim is None:
+        raise HTTPException(404, "Simulation introuvable")
+    return sim
 
 
 @app.get("/ai/recommendations")

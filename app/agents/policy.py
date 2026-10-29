@@ -56,8 +56,10 @@ def check(decision: str) -> PolicyResult:
             [],
         )
         trace = store.current_trace()
-        gap = store.Gap(store.new_id("GAP"), "VIDE_JURIDIQUE", "Aucun texte indexé ne couvre cette décision.", decision, trace.id if trace else None)
-        store.GAPS[gap.id] = gap
+        # Une même décision non couverte n'est inscrite qu'une fois au registre
+        if not any(g.decision_concernee == decision for g in store.GAPS.values()):
+            gap = store.Gap(store.new_id("GAP"), "VIDE_JURIDIQUE", "Aucun texte indexé ne couvre cette décision.", decision, trace.id if trace else None)
+            store.GAPS[gap.id] = gap
         store.record("policy", "verdict", decision, result.verdict, started)
         return result
 

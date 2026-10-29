@@ -20,6 +20,13 @@ FLEET = {
     "Almadies": {"lignes_actives": ["Ligne 08"], "bus_en_reserve": 5, "capacite": 60},
 }
 
+# Zones voisines : là où se reporte le trafic quand un axe ferme (utilisé par le simulateur)
+NEIGHBORS = {
+    "Dakar Plateau": ["Grand Dakar"],
+    "Grand Dakar": ["Dakar Plateau", "Almadies"],
+    "Almadies": ["Grand Dakar"],
+}
+
 
 def zones() -> list[str]:
     return list(TRAFFIC)
@@ -31,3 +38,7 @@ def traffic(zone: str) -> Optional[dict]:
 
 def fleet(zone: str) -> Optional[dict]:
     return FLEET.get(zone)
+
+
+def neighbors(zone: str) -> list[str]:
+    return NEIGHBORS.get(zone, [])

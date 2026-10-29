@@ -118,3 +118,30 @@ def test_zones_et_derniere_surveillance(no_kb):
     assert zones == {"Dakar Plateau": "SATURE", "Almadies": "FLUIDE", "Grand Dakar": "SATURE"}
     client.post("/ai/watcher/run")
     assert len(client.get("/ai/watcher/last").json()["alertes"]) == 2
+
+
+def test_simulation_fermeture_reporte_le_trafic_sans_rien_appliquer(no_kb):
+    client = TestClient(app)
+    sim = client.post("/ai/simulations", json={"type": "fermeture", "zone": "Almadies", "debut": "08:00", "fin": "12:00"}).json()
+    avant = {z["zone"]: z["niveau_congestion"] for z in sim["avant"]}
+    apres = {z["zone"]: z["niveau_congestion"] for z in sim["apres"]}
+    assert apres["Almadies"] > avant["Almadies"]  # capacité réduite
+    assert apres["Grand Dakar"] > avant["Grand Dakar"]  # report vers la zone voisine
+    assert apres["Dakar Plateau"] == avant["Dakar Plateau"]  # zone non voisine
+    assert sim["indicateurs"]["temps_parcours_pct"] > 0
+    # Le scénario est vérifié par l'agent Politique ; sans texte applicable : NON_COUVERT
+    assert sim["mesures"] and sim["mesures"][0]["verdict"] == "NON_COUVERT"
+    assert not store.RECOMMENDATIONS  # bac à sable : aucune recommandation créée
+    assert client.get(f"/ai/simulations/{sim['id']}").status_code == 200
+    assert client.get(f"/ai/traces/{sim['trace_id']}").json()["nature"] == "simulation"
+
+
+def test_simulation_renfort_evenement_et_validation(no_kb):
+    client = TestClient(app)
+    renfort = client.post("/ai/simulations", json={"type": "renfort", "zone": "Grand Dakar", "nb_bus": 4}).json()
+    gd = lambda etats: next(z for z in etats if z["zone"] == "Grand Dakar")["niveau_congestion"]
+    assert gd(renfort["apres"]) < gd(renfort["avant"])
+    event = client.post("/ai/simulations", json={"type": "evenement", "zone": "Almadies", "participants": 20000}).json()
+    assert event["indicateurs"]["personnes_concernees"] >= 20000
+    assert client.post("/ai/simulations", json={"type": "fermeture", "zone": "Inconnue"}).status_code == 422
+    assert client.post("/ai/simulations", json={"type": "fermeture", "zone": "Almadies", "debut": "25:00"}).status_code == 422
