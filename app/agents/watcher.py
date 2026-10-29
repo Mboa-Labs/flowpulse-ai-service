@@ -34,6 +34,9 @@ def level(congestion: int) -> Optional[str]:
     return None
 
 
+LAST_RUN: dict = {"trace_id": None, "alertes": []}
+
+
 def run() -> tuple[str, list[Alert]]:
     trace = store.start_trace("surveillance")
     alerts: list[Alert] = []
@@ -46,4 +49,5 @@ def run() -> tuple[str, list[Alert]]:
             continue
         reco = optimizer.propose(zone) if niveau == "SATURE" else None
         alerts.append(Alert(zone, niveau, t["niveau_congestion"], t["vitesse_moyenne"], reco.id if reco else None))
+    LAST_RUN.update(trace_id=trace.id, alertes=alerts)
     return trace.id, alerts

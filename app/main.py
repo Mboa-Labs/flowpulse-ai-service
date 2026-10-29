@@ -12,7 +12,7 @@ from fastapi import FastAPI, HTTPException, Query
 from pydantic import BaseModel
 
 from app import kb
-from app.agents import orchestrator, store, watcher
+from app.agents import data, orchestrator, store, watcher
 from app.config import settings
 
 app = FastAPI(title="FlowPulse AI service", version="0.1.0")
@@ -66,6 +66,16 @@ class Decision(BaseModel):
     motif: Optional[str] = None
 
 
+@app.get("/ai/zones")
+def zones() -> list[dict]:
+    """Vue d'ensemble par zone : trafic, flotte et niveau d'alerte (données de démonstration)."""
+    out = []
+    for z in data.zones():
+        t, f = data.traffic(z), data.fleet(z)
+        out.append({"zone": z, **t, **(f or {}), "niveau": watcher.level(t["niveau_congestion"]) or "FLUIDE"})
+    return out
+
+
 @app.post("/ai/assistant")
 def assistant(body: Question) -> dict:
     """Question en langage naturel au superviseur ; la réponse renvoie ses sources et l'identifiant de trace."""
@@ -77,6 +87,12 @@ def run_watcher() -> dict:
     """Lance un passage de surveillance : alertes, puis recommandations pour les zones saturées."""
     trace_id, alerts = watcher.run()
     return {"trace_id": trace_id, "alertes": [asdict(a) for a in alerts]}
+
+
+@app.get("/ai/watcher/last")
+def last_watcher_run() -> dict:
+    """Résultat du dernier passage de surveillance (pour l'affichage des alertes)."""
+    return {"trace_id": watcher.LAST_RUN["trace_id"], "alertes": [asdict(a) for a in watcher.LAST_RUN["alertes"]]}
 
 
 @app.get("/ai/recommendations")

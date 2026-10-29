@@ -110,3 +110,11 @@ def test_seule_la_decision_humaine_applique(no_kb):
     assert applied.json()["statut"] == "APPLIQUEE"
     assert client.post(f"/ai/recommendations/{reco_id}/decision", json={"decision": "appliquer"}).status_code == 409
     assert client.get(f"/ai/traces/{applied.json()['trace_id']}").status_code == 200
+
+
+def test_zones_et_derniere_surveillance(no_kb):
+    client = TestClient(app)
+    zones = {z["zone"]: z["niveau"] for z in client.get("/ai/zones").json()}
+    assert zones == {"Dakar Plateau": "SATURE", "Almadies": "FLUIDE", "Grand Dakar": "SATURE"}
+    client.post("/ai/watcher/run")
+    assert len(client.get("/ai/watcher/last").json()["alertes"]) == 2
