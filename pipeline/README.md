@@ -91,16 +91,32 @@ Si le disque n'apparaît pas dans l'Explorateur, ne jamais accepter « Initialis
 - **Dans le terminal :** `SET1 voix (lecture des 12 mois…)`, puis `SET2 (période 1)…`, puis `Rapport : …`.
 - **Ne pas fermer le terminal** pendant le traitement. Pour l'interrompre : `Ctrl + C`.
 
+### Ce qui s'affiche
+
+Le script annonce chaque étape et montre l'avancement au fur et à mesure :
+
+```
+[2/5] SET1 voix : lecture des 12 mois d'appels (environ 30 s par mois)
+      [██████░░░░░░░░░░░░░░░░░░]  25%  3/12  SET1V_03 : 108,2 M lignes  · reste ≈ 4 min 30 s
+```
+
 ### Où sont les résultats
 
-Dans le dossier `pipeline\sortie\` du dépôt :
+Dans le dossier `pipeline\sortie\` du dépôt. La liste des fichiers s'affiche aussi à la fin du traitement.
 
-| Fichier | Contenu |
-| --- | --- |
-| `exploration_d4d.md` | Le rapport : antennes et arrondissements de Dakar, volumes par mois, heures manquantes, valeurs suspectes, rythme de l'activité à Dakar (heures, jours, jours exceptionnels), doublons des trajets, décisions de nettoyage |
-| `set1v_heure_antenne.parquet` | Résumé des appels par heure et par antenne émettrice (environ 15 millions de lignes au lieu de plus d'un milliard), réutilisé par l'étape d'agrégation |
+| Fichier | Format | Contenu | S'ouvre avec |
+| --- | --- | --- | --- |
+| `exploration_d4d.md` | Markdown | Le rapport : antennes et arrondissements de Dakar, volumes par mois, heures manquantes, valeurs suspectes, rythme de l'activité, doublons des trajets, décisions de nettoyage | VS Code (clic droit → *Open Preview*), GitHub |
+| `exploration_mois.csv` | CSV (`;`) | Volumes et anomalies par mois | Excel, LibreOffice |
+| `exploration_dakar_par_heure.csv` | CSV (`;`) | Appels moyens à Dakar par heure de la journée | Excel, LibreOffice |
+| `exploration_dakar_par_jour.csv` | CSV (`;`) | Appels moyens à Dakar par jour de la semaine | Excel, LibreOffice |
+| `exploration_dakar_jours.csv` | CSV (`;`) | Appels à Dakar pour chaque jour de 2013, du plus calme au plus chargé | Excel, LibreOffice |
+| `set1v_heure_antenne.parquet` | Parquet | Appels par heure et par antenne émettrice : environ 15 millions de lignes au lieu de plus d'un milliard, réutilisées par l'étape d'agrégation | Python (pandas, DuckDB), pas Excel |
 
-Le rapport s'ouvre dans VS Code : clic droit sur le fichier → *Open Preview* pour l'afficher mis en forme.
+**Pourquoi ces formats :**
+- **Markdown** pour le rapport : lisible tel quel, affiché proprement par VS Code et GitHub, facile à reprendre dans le rapport de 5 pages.
+- **CSV** pour les petits tableaux : ils s'ouvrent dans Excel pour faire des graphiques.
+- **Parquet** pour les grands tableaux : 15 millions de lignes ne tiennent pas dans Excel (limite d'environ 1 million). Parquet est compressé (environ 10 fois plus petit qu'un CSV), garde les types (dates, nombres) et se relit en quelques secondes. C'est le format standard des pipelines de données.
 
 ## Étape 4 : nettoyage et agrégation
 
