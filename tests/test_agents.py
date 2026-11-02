@@ -207,9 +207,21 @@ def test_tension_par_arret():
     assert colobane["offre_par_heure"] == 7 * 60 and colobane["niveau"] == "SATURE"
 
 
-def test_inventaire_de_la_base_de_connaissances():
-    d = TestClient(app).get("/ai/kb/documents").json()
-    assert len(d["documents"]) >= 20 and {"id", "statut", "passages"} <= set(d["documents"][0])
+def test_inventaire_de_la_base_de_connaissances(tmp_path, monkeypatch):
+    # Inventaire fictif : le test ne dépend pas du dépôt de la base de connaissances
+    entetes = "id,dossier,fichier,titre,reference,type,autorite,date_adoption,domaine,pays,url_source,statut,responsable,notes"
+    (tmp_path / "sources.csv").write_text(
+        entetes + "
+SEN-DP-001,Senegal,loi.pdf,Loi sur les données personnelles,Loi 2008-12,LOI,État,2008-01-25,"
+        "donnees_personnelles,Sénégal,https://exemple.sn,collecte,,
+", encoding="utf-8")
+    monkeypatch.setattr(kb.settings, "chroma_dir", tmp_path / "chroma")
+    kb._client.cache_clear()
+    try:
+        d = TestClient(app).get("/ai/kb/documents").json()
+    finally:
+        kb._client.cache_clear()
+    assert [x["id"] for x in d["documents"]] == ["SEN-DP-001"] and d["documents"][0]["passages"] == 0
     assert d["indexation"]["etat"] in ("inactive", "en_cours", "terminee", "echec")
 
 
