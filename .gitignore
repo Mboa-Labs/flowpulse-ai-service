@@ -2,3 +2,6 @@
 __pycache__/
 *.pyc
 .pytest_cache/
+
+# Sorties du pipeline D4D (agrégats et rapports locaux, jamais les données brutes)
+pipeline/sortie/

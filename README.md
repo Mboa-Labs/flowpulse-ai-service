@@ -50,3 +50,7 @@ pytest                                              # tests sans Ollama (modèle
 
 Variables (préfixe `FLOWPULSE_`) : `OLLAMA_URL`, `LLM_MODEL` (défaut `qwen2.5:7b`, `qwen2.5:14b` sur un serveur avec carte graphique), `EMBED_MODEL`, `CHROMA_DIR`, `BACKEND_URL`, `DATABASE_URL` (ex. `postgresql://flowpulse:flowpulse@localhost:15432/flowpulse`).
 Par défaut, `CHROMA_DIR` pointe vers le dépôt voisin `../flowpulse-knowledge-base/chroma`.
+
+## Données réelles (D4D-Sénégal)
+
+Le pipeline de préparation du dataset (exploration, nettoyage, agrégation par zone) est dans [`pipeline/`](pipeline/README.md), avec les commandes à lancer étape par étape et l'emplacement des résultats.
