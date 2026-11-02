@@ -156,5 +156,5 @@ def run(scenario: Scenario) -> dict:
         "trace_id": trace.id,
         "date": time.time(),
     }
-    store.SIMULATIONS[simulation["id"]] = simulation
+    store.put_simulation(simulation)
     return simulation

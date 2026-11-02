@@ -4,18 +4,36 @@ Routes : santé, recherche dans la base de connaissances, superviseur (Orchestra
 surveillance (Watcher + Optimizer + Policy), simulation What-If, recommandations, traces et manques réglementaires.
 """
 
+from contextlib import asynccontextmanager
 from dataclasses import asdict
 from typing import Literal, Optional
 
 import httpx
-from fastapi import FastAPI, HTTPException, Query
+from fastapi import FastAPI, HTTPException, Query, Request
 from pydantic import BaseModel, Field
+from starlette.concurrency import run_in_threadpool
 
-from app import kb
+from app import kb, persistence
 from app.agents import data, orchestrator, simulator, store, watcher
 from app.config import settings
 
-app = FastAPI(title="FlowPulse AI service", version="0.1.0")
+
+@asynccontextmanager
+async def lifespan(_: FastAPI):
+    persistence.init(persistence.connect(settings.database_url))
+    yield
+    persistence.flush()
+
+
+app = FastAPI(title="FlowPulse AI service", version="0.1.0", lifespan=lifespan)
+
+
+@app.middleware("http")
+async def save_changes(request: Request, call_next):
+    """Après chaque requête, enregistre ce que les agents ont créé ou modifié."""
+    response = await call_next(request)
+    await run_in_threadpool(persistence.flush)
+    return response
 
 
 class PassageOut(BaseModel):
@@ -104,7 +122,7 @@ def run_watcher() -> dict:
 @app.get("/ai/watcher/last")
 def last_watcher_run() -> dict:
     """Résultat du dernier passage de surveillance (pour l'affichage des alertes)."""
-    return {"trace_id": watcher.LAST_RUN["trace_id"], "alertes": [asdict(a) for a in watcher.LAST_RUN["alertes"]]}
+    return watcher.last_run()
 
 
 @app.post("/ai/simulations")
@@ -155,6 +173,7 @@ def decide(reco_id: str, body: Decision) -> dict:
     reco.statut = "APPLIQUEE" if body.decision == "appliquer" else "REJETEE"
     if body.motif:
         reco.justification = f"{reco.justification} Motif de rejet : {body.motif}".strip()
+    store.mark("recommandation", reco.id)
     return asdict(reco)
 
 

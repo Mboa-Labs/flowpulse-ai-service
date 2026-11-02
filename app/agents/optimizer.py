@@ -51,5 +51,5 @@ def propose(zone: str, ligne: Optional[str] = None, nb_bus: Optional[int] = None
         citations=verdict.citations,
         trace_id=trace.id if trace else None,
     )
-    store.RECOMMENDATIONS[reco.id] = reco
+    store.put_recommendation(reco)
     return reco

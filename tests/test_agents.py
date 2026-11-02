@@ -145,3 +145,42 @@ def test_simulation_renfort_evenement_et_validation(no_kb):
     assert event["indicateurs"]["personnes_concernees"] >= 20000
     assert client.post("/ai/simulations", json={"type": "fermeture", "zone": "Inconnue"}).status_code == 422
     assert client.post("/ai/simulations", json={"type": "fermeture", "zone": "Almadies", "debut": "25:00"}).status_code == 422
+
+
+class MemoryBackend:
+    """Stockage factice : garde les lignes comme le ferait PostgreSQL."""
+
+    def __init__(self):
+        self.rows = {}
+
+    def load(self):
+        return [(t, i, d) for (t, i), d in self.rows.items()]
+
+    def save(self, rows):
+        for t, i, d in rows:
+            self.rows[(t, i)] = json.loads(json.dumps(d, default=str))
+
+
+def test_tout_est_conserve_apres_un_redemarrage(no_kb):
+    from app import persistence
+
+    backend = MemoryBackend()
+    persistence.init(backend)
+    try:
+        client = TestClient(app)
+        reco_id = client.post("/ai/watcher/run").json()["alertes"][0]["recommendation_id"]
+        client.post(f"/ai/recommendations/{reco_id}/decision", json={"decision": "rejeter", "motif": "Bus en maintenance"})
+        sim_id = client.post("/ai/simulations", json={"type": "fermeture", "zone": "Almadies"}).json()["id"]
+        kinds = {t for t, _ in backend.rows}
+        assert kinds == {"trace", "recommandation", "manque", "simulation", "etat"}
+
+        store.reset()  # redémarrage du service
+        persistence.init(backend)
+        assert store.RECOMMENDATIONS[reco_id].statut == "REJETEE"
+        assert "Bus en maintenance" in store.RECOMMENDATIONS[reco_id].justification
+        assert client.get(f"/ai/simulations/{sim_id}").status_code == 200
+        assert len(client.get("/ai/watcher/last").json()["alertes"]) == 2
+        trace_id = store.RECOMMENDATIONS[reco_id].trace_id
+        assert client.get(f"/ai/traces/{trace_id}").json()["etapes"]
+    finally:
+        persistence.init(None)

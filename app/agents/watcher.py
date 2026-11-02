@@ -8,7 +8,7 @@ une recommandation à l'Optimizer.
 from __future__ import annotations
 
 import time
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass
 from typing import Optional
 
 from app.agents import data, optimizer, store
@@ -34,8 +34,6 @@ def level(congestion: int) -> Optional[str]:
     return None
 
 
-LAST_RUN: dict = {"trace_id": None, "alertes": []}
-
 
 def run() -> tuple[str, list[Alert]]:
     trace = store.start_trace("surveillance")
@@ -49,5 +47,10 @@ def run() -> tuple[str, list[Alert]]:
             continue
         reco = optimizer.propose(zone) if niveau == "SATURE" else None
         alerts.append(Alert(zone, niveau, t["niveau_congestion"], t["vitesse_moyenne"], reco.id if reco else None))
-    LAST_RUN.update(trace_id=trace.id, alertes=alerts)
+    store.set_state("derniere_surveillance", {"trace_id": trace.id, "alertes": [asdict(a) for a in alerts]})
     return trace.id, alerts
+
+
+def last_run() -> dict:
+    """Résultat du dernier passage de surveillance (conservé au redémarrage)."""
+    return store.STATE.get("derniere_surveillance", {"trace_id": None, "alertes": []})

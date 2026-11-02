@@ -12,6 +12,7 @@ Aucune donnée ne quitte le serveur : le modèle de langage tourne en local via 
 | Optimizer (`app/agents/optimizer.py`) | Calcule une réaffectation de bus de réserve et la soumet à l'agent Politique | Non |
 | Policy (`app/agents/policy.py`) | Vérifie la décision au regard des textes de la base de connaissances, cite le document et l'article, enregistre un manque réglementaire si aucun texte ne s'applique | Oui |
 | Orchestrator (`app/agents/orchestrator.py`) | Superviseur conversationnel : choisit les outils, reçoit leurs résultats, répond | Oui |
+| Simulator (`app/agents/simulator.py`) | Bac à sable What-If : fermeture d'axe, événement, renfort ; report du trafic, temps de parcours, mesures vérifiées par l'agent Politique | Non (sauf vérification) |
 
 Règle commune : **aucun agent n'applique de réaffectation**. Les agents créent des recommandations au statut `PROPOSEE` ; seule la décision humaine (`/ai/recommendations/{id}/decision`) les applique. Chaque étape est tracée (agent, action, entrées, sorties, durée, sources).
 
@@ -29,6 +30,10 @@ Les données de trafic et de flotte sont pour l'instant des données de démonst
 | `POST /ai/recommendations/{id}/decision` | Décision humaine : `appliquer` ou `rejeter` (motif obligatoire) |
 | `GET /ai/traces/{id}` | Raisonnement complet d'une réponse ou d'une alerte |
 | `GET /ai/gaps` | Manques réglementaires détectés |
+| `GET /ai/zones`, `GET /ai/watcher/last` | Vue par zone, dernière surveillance |
+| `POST /ai/simulations`, `GET /ai/simulations`, `GET /ai/simulations/{id}` | Simulation What-If et historique |
+
+Traces, recommandations, manques, simulations et dernière surveillance sont enregistrés dans PostgreSQL (table `mobility.objet_agent`) après chaque requête et rechargés au démarrage. Sans `FLOWPULSE_DATABASE_URL`, le service reste en mémoire.
 
 ## Lancer
 
@@ -43,5 +48,5 @@ python -m app.cli                                   # superviseur en mode consol
 pytest                                              # tests sans Ollama (modèle simulé)
 ```
 
-Variables (préfixe `FLOWPULSE_`) : `OLLAMA_URL`, `LLM_MODEL` (défaut `qwen2.5:7b`, `qwen2.5:14b` sur un serveur avec carte graphique), `EMBED_MODEL`, `CHROMA_DIR`, `BACKEND_URL`.
+Variables (préfixe `FLOWPULSE_`) : `OLLAMA_URL`, `LLM_MODEL` (défaut `qwen2.5:7b`, `qwen2.5:14b` sur un serveur avec carte graphique), `EMBED_MODEL`, `CHROMA_DIR`, `BACKEND_URL`, `DATABASE_URL` (ex. `postgresql://flowpulse:flowpulse@localhost:15432/flowpulse`).
 Par défaut, `CHROMA_DIR` pointe vers le dépôt voisin `../flowpulse-knowledge-base/chroma`.
