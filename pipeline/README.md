@@ -166,9 +166,19 @@ Dans le même dossier `pipeline\sortie\` :
 | `serie_zone_heure.parquet` | Parquet | La même série, pour le modèle de prévision et le service IA | Python |
 | `flux_zone_heure.parquet` | Parquet | Déplacements par heure entre zones (origine → destination, zone 0 = hors Dakar) | Python |
 
-L'**indice de tension** (0 à 100) rapporte l'activité de l'heure au haut niveau habituel de la zone (99e centile de janvier à septembre, la période d'apprentissage du modèle : rien ne fuit des mois d'évaluation). C'est un **indicateur de tension de mobilité** tiré de l'activité téléphonique, pas une mesure directe du trafic routier. L'**écart habituel** compare l'heure à la médiane de la zone pour le même jour et la même heure (1 = habituel) : il fait ressortir les événements.
+L'**indice de tension** (0 à 100) rapporte l'activité de l'heure au haut niveau **récent** de la zone : le 99e centile de ses appels sur les **4 semaines précédentes**. Il ne regarde que le passé (rien ne fuit de l'avenir) et suit la croissance du nombre d'abonnés au fil de 2013. C'est un **indicateur de tension de mobilité** tiré de l'activité téléphonique, pas une mesure directe du trafic routier. L'**écart habituel** compare l'heure à la médiane des 8 mêmes créneaux précédents (même jour, même heure ; 1 = habituel) : il fait ressortir les événements.
 
 Aucun de ces fichiers ne contient de donnée individuelle : uniquement des totaux par zone et par heure.
+
+### Recalculer seulement l'indice
+
+Si seule la définition de l'indice change (nouvelle version du script), inutile de relire le disque : l'étape `indice` repart de `serie_zone_heure.parquet` et réécrit les séries en quelques secondes.
+
+```powershell
+python -I pipeline\d4d.py indice
+```
+
+Relancer ensuite l'étape 5 (le modèle apprend sur l'indice).
 
 ## Étape 5 : entraîner le modèle de prévision
 

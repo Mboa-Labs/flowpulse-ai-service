@@ -3,6 +3,7 @@
 Étapes, chacune relançable seule :
   explorer   volumes, période couverte, heures manquantes, valeurs suspectes (rapport Markdown)
   agreger    nettoyage, sélection de la région de Dakar, agrégation par arrondissement et par heure
+  indice     recalcule seulement l'indice de tension des séries déjà agrégées (sans le disque)
   entrainer  modèle de prévision de l'indice de tension à 1 h et 2 h (sans le disque)
 
 Les fichiers bruts sont lus en place, compressés, sans jamais être modifiés ni copiés.
@@ -24,8 +25,6 @@ from pathlib import Path
 
 import duckdb
 
-sys.path.insert(0, str(Path(__file__).resolve().parent))
-from periodes import FIN_APPRENTISSAGE  # noqa: E402
 
 SORTIE = Path(__file__).resolve().parent / "sortie"
 DAKAR = tuple(range(1, 11))  # ARR_ID des 10 arrondissements de la région de Dakar
@@ -250,6 +249,63 @@ def explorer(source: Path) -> None:
         print(f"  - {f.name} ({taille(f.stat().st_size)})")
 
 
+# ---------------------------------------------------------------------------------------- Indice de tension
+
+FENETRE_REPERE = "28 days"  # le niveau haut de référence d'une zone : ses 4 dernières semaines
+SEMAINES_HABITUEL = 8  # le niveau habituel : même jour et même heure, sur les 8 semaines précédentes
+
+
+def calculer_indice(con: duckdb.DuckDBPyConnection) -> None:
+    """Crée la table « serie » à partir de « base » (t, arr_id, zone, appels, …) en ajoutant l'indice de tension.
+
+    Les repères ne regardent que le passé de chaque heure : le 99e centile des appels de la zone sur les
+    4 semaines précédentes (niveau haut récent) et la médiane des 8 mêmes créneaux précédents (niveau habituel).
+    L'indice suit ainsi la croissance du nombre d'abonnés au fil de l'année, et ne révèle rien de l'avenir.
+    """
+    con.execute(f"""
+        CREATE OR REPLACE TABLE serie AS
+        WITH r AS (
+            SELECT *,
+                   quantile_cont(appels, 0.99) OVER recent AS p99_recent,
+                   count(*) OVER recent AS heures_recentes,
+                   median(appels) OVER (PARTITION BY arr_id, dayofweek(t), hour(t) ORDER BY t
+                                        ROWS BETWEEN {SEMAINES_HABITUEL} PRECEDING AND 1 PRECEDING) AS mediane_habituelle
+            FROM base
+            WINDOW recent AS (PARTITION BY arr_id ORDER BY t
+                              RANGE BETWEEN INTERVAL '{FENETRE_REPERE}' PRECEDING AND INTERVAL 1 HOUR PRECEDING)),
+        debut AS (  -- premières semaines de l'année, sans assez d'historique : repère des 4 premières semaines
+            SELECT arr_id, quantile_cont(appels, 0.99) AS p99_debut FROM base
+            WHERE t < (SELECT min(t) FROM base) + INTERVAL '{FENETRE_REPERE}' GROUP BY 1)
+        SELECT t, arr_id, zone, appels, antennes_actives, presents_echantillon, arrivees, departs,
+               least(100, round(100 * appels / CASE WHEN heures_recentes >= 7 * 24 THEN p99_recent ELSE p99_debut END))::INTEGER
+                   AS indice_tension,
+               round(appels / nullif(mediane_habituelle, 0), 3) AS ecart_habituel
+        FROM r JOIN debut USING (arr_id)
+        ORDER BY t, arr_id""")
+
+
+def indice(source: Path | None) -> None:
+    """Recalcule seulement l'indice de tension des séries déjà agrégées (quelques secondes, sans le disque)."""
+    fichier = SORTIE / "serie_zone_heure.parquet"
+    if not fichier.exists():
+        sys.exit("Séries introuvables : lancer d'abord l'étape « agreger ».")
+    av = Avancement(2)
+    av.etape("Recalcul de l'indice de tension à partir des séries agrégées")
+    con = duckdb.connect()
+    con.execute("SET enable_progress_bar = false")
+    con.execute(f"""CREATE TABLE base AS SELECT t, arr_id, zone, appels, antennes_actives, presents_echantillon, arrivees, departs
+                    FROM read_parquet('{fichier.as_posix()}')""")
+    calculer_indice(con)
+    part = con.execute("SELECT avg(CASE WHEN indice_tension >= 85 THEN 1 ELSE 0 END), "
+                       "avg(CASE WHEN indice_tension >= 75 THEN 1 ELSE 0 END) FROM serie").fetchone()
+    av.fin(f"{pourcent(part[0])} des heures-zones à 85 ou plus, {pourcent(part[1])} à 75 ou plus")
+    av.etape("Écriture des séries")
+    con.execute(f"COPY serie TO '{fichier.as_posix()}' (FORMAT parquet)")
+    con.execute(f"COPY serie TO '{(SORTIE / 'serie_zone_heure.csv').as_posix()}' (HEADER, DELIMITER ';')")
+    av.fin()
+    print(f"\nIndice recalculé en {av.total_ecoule()}. Fichiers mis à jour : serie_zone_heure.parquet, serie_zone_heure.csv")
+
+
 # ---------------------------------------------------------------------------------------- Agrégation
 
 JOURS_EXCLUS = ("2013-03-29",)  # panne de collecte constatée à l'exploration (journée presque vide)
@@ -319,30 +375,17 @@ def agreger(source: Path) -> None:
     av.fin(f"{nombre(con.execute('SELECT sum(deplacements) FROM flux').fetchone()[0])} déplacements entre zones")
 
     av.etape("Séries par zone et indice de tension")
-    con.execute(f"""
-        CREATE TABLE serie AS
-        WITH base AS (
-            SELECT a.t, a.arr_id, a.appels, a.antennes_actives,
-                   coalesce(p.presents, 0) AS presents_echantillon,
-                   coalesce(arr.n, 0) AS arrivees, coalesce(dep.n, 0) AS departs
-            FROM activite a
-            LEFT JOIN presence p USING (t, arr_id)
-            LEFT JOIN (SELECT t, destination AS arr_id, sum(deplacements) AS n FROM flux GROUP BY 1, 2) arr USING (t, arr_id)
-            LEFT JOIN (SELECT t, origine AS arr_id, sum(deplacements) AS n FROM flux GROUP BY 1, 2) dep USING (t, arr_id)),
-        reperes AS (
-            SELECT arr_id, quantile_cont(appels, 0.99) AS p99 FROM base WHERE t < TIMESTAMP '{FIN_APPRENTISSAGE}' GROUP BY 1),
-        habituel AS (
-            SELECT arr_id, dayofweek(t) AS jour, hour(t) AS heure, median(appels) AS mediane FROM base
-            WHERE t < TIMESTAMP '{FIN_APPRENTISSAGE}' GROUP BY 1, 2, 3)
-        SELECT b.t, b.arr_id, z.zone, b.appels, b.antennes_actives, b.presents_echantillon, b.arrivees, b.departs,
-               -- 0 à 100 : activité de l'heure rapportée au haut niveau habituel de la zone
-               -- (99e centile de la période d'apprentissage, pour ne rien révéler des mois d'évaluation)
-               least(100, round(100 * b.appels / r.p99))::INTEGER AS indice_tension,
-               -- 1 = niveau habituel de la zone pour ce jour de la semaine et cette heure
-               round(b.appels / nullif(h.mediane, 0), 3) AS ecart_habituel
-        FROM base b JOIN zones z USING (arr_id) JOIN reperes r USING (arr_id)
-        JOIN habituel h ON h.arr_id = b.arr_id AND h.jour = dayofweek(b.t) AND h.heure = hour(b.t)
-        ORDER BY b.t, b.arr_id""")
+    con.execute("""
+        CREATE TABLE base AS
+        SELECT a.t, a.arr_id, z.zone, a.appels, a.antennes_actives,
+               coalesce(p.presents, 0) AS presents_echantillon,
+               coalesce(arr.n, 0) AS arrivees, coalesce(dep.n, 0) AS departs
+        FROM activite a
+        JOIN zones z USING (arr_id)
+        LEFT JOIN presence p USING (t, arr_id)
+        LEFT JOIN (SELECT t, destination AS arr_id, sum(deplacements) AS n FROM flux GROUP BY 1, 2) arr USING (t, arr_id)
+        LEFT JOIN (SELECT t, origine AS arr_id, sum(deplacements) AS n FROM flux GROUP BY 1, 2) dep USING (t, arr_id)""")
+    calculer_indice(con)
     qualite = con.execute(f"""
         SELECT count(*), count(DISTINCT t), min(t), max(t),
                sum(CASE WHEN indice_tension >= 85 THEN 1 ELSE 0 END), sum(CASE WHEN indice_tension >= 75 THEN 1 ELSE 0 END)
@@ -392,11 +435,11 @@ def agreger(source: Path) -> None:
         "- `appels` : appels émis depuis les antennes de la zone pendant l'heure (tous les abonnés Orange, SET1).",
         "- `presents_echantillon` : usagers de l'échantillon SET2 vus dans la zone pendant l'heure.",
         "- `arrivees`, `departs` : déplacements de l'échantillon SET2 qui entrent dans la zone ou en sortent pendant l'heure.",
-        "- `indice_tension` (0 à 100) : activité de l'heure rapportée au haut niveau habituel de la zone "
-        f"(99e centile de janvier au {FIN_APPRENTISSAGE}, période d'apprentissage du modèle). "
-        "C'est un indicateur de tension de mobilité, pas une mesure du trafic routier.",
-        "- `ecart_habituel` : activité rapportée à la médiane de la zone pour le même jour de la semaine et la même heure "
-        "(1 = habituel, 1,5 = 50 % au-dessus), calculée sur la même période ; sert à repérer les événements.", "",
+        "- `indice_tension` (0 à 100) : activité de l'heure rapportée au haut niveau récent de la zone "
+        "(99e centile de ses appels sur les 4 semaines précédentes). Il ne regarde que le passé et suit la croissance "
+        "du nombre d'abonnés. C'est un indicateur de tension de mobilité, pas une mesure du trafic routier.",
+        "- `ecart_habituel` : activité rapportée à la médiane de la zone pour le même jour de la semaine et la même heure, "
+        "sur les 8 semaines précédentes (1 = habituel, 1,5 = 50 % au-dessus) ; sert à repérer les événements.", "",
         f"_Durée de l'agrégation : {av.total_ecoule()}._", ""]
     (SORTIE / "agregation_d4d.md").write_text("\n".join(rapport), encoding="utf-8")
     av.fin()
@@ -419,16 +462,16 @@ def entrainer(_source: Path | None) -> None:
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("etape", choices=["explorer", "agreger", "entrainer"])
+    parser.add_argument("etape", choices=["explorer", "agreger", "indice", "entrainer"])
     parser.add_argument("--source", type=Path, help="dossier data du disque (contient SET1, SET2, ContextData) ; "
                                                      "inutile pour « entrainer »")
     parser.add_argument("--sortie", type=Path, default=SORTIE, help=f"dossier des résultats (défaut : {SORTIE})")
     args = parser.parse_args()
-    if args.etape != "entrainer" and args.source is None:
+    if args.etape in ("explorer", "agreger") and args.source is None:
         parser.error(f"l'étape « {args.etape} » a besoin de --source (le dossier data du disque)")
     globals()["SORTIE"] = args.sortie
     sys.stdout.reconfigure(encoding="utf-8")  # barres et accents corrects dans la console Windows
-    {"explorer": explorer, "agreger": agreger, "entrainer": entrainer}[args.etape](args.source)
+    {"explorer": explorer, "agreger": agreger, "indice": indice, "entrainer": entrainer}[args.etape](args.source)
 
 
 if __name__ == "__main__":
