@@ -102,6 +102,7 @@ def traffic(zone: str) -> Optional[dict]:
             break
     else:
         return None
+    prev = REEL.prevision(zone, ligne["t"])
     return {
         "niveau_congestion": int(ligne["indice_tension"]),
         "vitesse_moyenne": None,  # le dataset ne mesure pas la vitesse
@@ -110,8 +111,8 @@ def traffic(zone: str) -> Optional[dict]:
         "arrivees": int(ligne["arrivees"]),
         "departs": int(ligne["departs"]),
         "ecart_habituel": _propre(ligne.get("ecart_habituel")),
-        "prevision_1h": _propre(ligne.get("prevision_1h")),
-        "prevision_2h": _propre(ligne.get("prevision_2h")),
+        "prevision_1h": prev.get(1),
+        "prevision_2h": prev.get(2),
         "heure": ligne["t"],
         "source": "d4d",
     }
@@ -152,10 +153,10 @@ def historique(zone: str, heures: int = 24) -> list[dict]:
         ligne = REEL.ligne(zone, (t - timedelta(hours=k)).strftime("%Y-%m-%dT%H"))
         if ligne:
             out.append({"t": ligne["t"], "observe": int(ligne["indice_tension"])})
-    actuel = REEL.ligne(zone, t.strftime("%Y-%m-%dT%H"))
-    if actuel:
+    if REEL.ligne(zone, t.strftime("%Y-%m-%dT%H")):
+        prev = REEL.prevision(zone, t.strftime("%Y-%m-%dT%H"))
         for h in (1, 2):
-            p = _propre(actuel.get(f"prevision_{h}h"))
+            p = prev.get(h)
             if p is not None:
                 out.append({"t": (t + timedelta(hours=h)).strftime("%Y-%m-%dT%H:00"), "prevu": int(p)})
     return out

@@ -45,6 +45,11 @@ class Reel:
     debut: str = ""
     fin: str = ""
     resultats: dict = field(default_factory=dict)
+    # Prévision à la demande : caractéristiques de toutes les heures, modèles chargés, résultats mis en cache
+    caracteristiques: object = None  # DataFrame indexé par l'heure « AAAA-MM-JJTHH »
+    modeles: dict = field(default_factory=dict)  # horizon (h) -> Booster LightGBM
+    entrees: list = field(default_factory=list)
+    _cache: dict = field(default_factory=dict)
 
     def noms(self) -> list[str]:
         return [z["zone"] for z in self.zones]
@@ -54,6 +59,24 @@ class Reel:
 
     def ligne(self, nom: str, t: str) -> Optional[dict]:
         return self.serie.get((nom, t[:13]))
+
+    def prevision(self, nom: str, t: str) -> dict[int, Optional[float]]:
+        """Prévision du modèle faite à l'heure t, pour chaque horizon (calculée à la première demande de cette heure)."""
+        cle = t[:13]
+        if not self.modeles or self.caracteristiques is None:
+            return {}
+        if cle not in self._cache:
+            try:
+                lignes = self.caracteristiques.loc[[cle]]
+            except KeyError:
+                self._cache[cle] = {}
+            else:
+                self._cache[cle] = {
+                    z: {h: round(float(v)) for h, v in zip(self.modeles, vals)}
+                    for z, *vals in zip(lignes["zone_nom"],
+                                        *[m.predict(lignes[self.entrees]).clip(0, 100) for m in self.modeles.values()])
+                }
+        return self._cache[cle].get(nom, {})
 
 
 def heure(t: str) -> str:
@@ -76,8 +99,9 @@ def charger(dossier: Path) -> Optional[Reel]:
     serie["t"] = pd.to_datetime(serie["t"])
     zones = pd.read_csv(zones_f, sep=";").to_dict("records")
 
-    # Prévisions du modèle, calculées une fois pour toutes les heures (rapide : moins de 100 000 lignes)
-    seuils, resultats = {}, {}
+    # Modèles de prévision : les caractéristiques sont préparées pour toute l'année (moins d'une seconde),
+    # la prévision elle-même n'est calculée que pour les heures demandées (démarrage rapide)
+    seuils, resultats, feats, modeles, entrees = {}, {}, None, {}, []
     modele_dir = dossier / "modele"
     if (modele_dir / "tension_1h.txt").exists():
         try:
@@ -87,16 +111,17 @@ def charger(dossier: Path) -> Optional[Reel]:
             import modele as pipeline_modele
 
             feats = pipeline_modele.caracteristiques(serie)
-            for h in pipeline_modele.HORIZONS:
-                booster = lgb.Booster(model_file=str(modele_dir / f"tension_{h}h.txt"))
-                feats[f"prevision_{h}h"] = booster.predict(feats[pipeline_modele.ENTREES]).clip(0, 100).round()
-            serie = serie.merge(feats[["arr_id", "t"] + [f"prevision_{h}h" for h in pipeline_modele.HORIZONS]],
-                                on=["arr_id", "t"], how="left")
+            noms = {int(z["arr_id"]): z["zone"] for z in zones}
+            feats["zone_nom"] = feats["arr_id"].map(noms)
+            feats.index = feats["t"].dt.strftime("%Y-%m-%dT%H")
+            modeles = {h: lgb.Booster(model_file=str(modele_dir / f"tension_{h}h.txt")) for h in pipeline_modele.HORIZONS}
+            entrees = list(pipeline_modele.ENTREES)
             meta = json.loads((modele_dir / "metadonnees.json").read_text(encoding="utf-8"))
             seuils = meta.get("seuils_alerte_modele", {})
             resultats = meta.get("resultats", {})
         except Exception:
             log.exception("Modèles de prévision non chargés : l'application fonctionne sans prévision")
+            feats, modeles = None, {}
 
     lignes = {}
     for r in serie.to_dict("records"):
@@ -116,4 +141,5 @@ def charger(dossier: Path) -> Optional[Reel]:
 
     log.info("Données réelles chargées : %d zones, %d heures-zones", len(zones), len(lignes))
     return Reel(zones=zones, serie=lignes, voisins=voisins, seuils=seuils, resultats=resultats,
-                debut=serie["t"].min().strftime("%Y-%m-%dT%H:00"), fin=serie["t"].max().strftime("%Y-%m-%dT%H:00"))
+                debut=min(k[1] for k in lignes) + ":00", fin=max(k[1] for k in lignes) + ":00",
+                caracteristiques=feats, modeles=modeles, entrees=entrees)

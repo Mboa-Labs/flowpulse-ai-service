@@ -21,6 +21,9 @@ PART_AXE = 0.35  # part de la capacité de la zone portée par l'axe fermé
 REPORT = 0.6  # part du trafic de l'axe qui se reporte vers les zones voisines
 PART_VOITURE = 0.35  # part des participants d'un événement qui viennent en voiture
 OCCUPATION = 1.5  # personnes par voiture
+# Données réelles : les déplacements observés viennent d'un échantillon d'environ 300 000 usagers (SET2) sur
+# environ 9 millions d'abonnés ; on les extrapole puis on garde la part qui circule en voiture
+EXTRAPOLATION = 30
 PASSAGERS_BUS_HEURE = 120  # 60 places, 2 rotations par heure
 REPORT_MODAL = 0.25  # part des passagers d'un bus de renfort qui auraient pris leur voiture
 
@@ -78,7 +81,12 @@ def run(scenario: Scenario) -> dict:
     duree = scenario.duree_h()
 
     # Copie des données : la simulation ne touche jamais l'état réel
-    base = {z: dict(data.traffic(z)) for z in data.zones()}
+    base = {z: dict(t) for z in data.zones() if (t := data.traffic(z)) is not None}
+    reel = any(t.get("source") == "d4d" for t in base.values())
+    if reel:
+        # Demande en équivalent véhicules : déplacements de l'échantillon × extrapolation × part en voiture / occupation
+        for t in base.values():
+            t["vehicules_par_heure"] = max(1.0, t["vehicules_par_heure"] * EXTRAPOLATION * PART_VOITURE / OCCUPATION)
     capacite = {z: t["vehicules_par_heure"] / max(t["niveau_congestion"], 1) * 100 for z, t in base.items()}
     vph = {z: float(t["vehicules_par_heure"]) for z, t in base.items()}
     cap = dict(capacite)
@@ -148,7 +156,11 @@ def run(scenario: Scenario) -> dict:
         "indicateurs": indicateurs,
         "mesures": mesures,
         "hypotheses": [
-            "Modèle de démonstration : capacité par zone et temps de parcours BPR (1 + 0,15 × charge⁴), en attendant le dataset.",
+            ("Données réelles D4D-Sénégal à l'instant rejoué : la charge de départ d'une zone est son indice de tension ; "
+             f"sa demande, ses déplacements observés dans l'échantillon (×{EXTRAPOLATION} pour l'ensemble des abonnés), "
+             f"dont {round(PART_VOITURE * 100)} % en voiture. Zones voisines : principales destinations réelles des déplacements."
+             if reel else "Modèle de démonstration : zones et voisinages fictifs, en attendant les données réelles."),
+            "Temps de parcours : fonction BPR (1 + 0,15 × charge⁴), standard en ingénierie du trafic.",
             f"Fermeture : l'axe porte {round(PART_AXE * 100)} % de la capacité de la zone ; {round(REPORT * 100)} % de son trafic se reporte sur les zones voisines.",
             f"Événement : {round(PART_VOITURE * 100)} % des participants viennent en voiture ({OCCUPATION} personnes par véhicule), arrivées réparties sur la durée.",
             f"Renfort : chaque bus transporte {PASSAGERS_BUS_HEURE} passagers par heure, dont {round(REPORT_MODAL * 100)} % auraient pris leur voiture.",
