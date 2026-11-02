@@ -27,6 +27,18 @@ NEIGHBORS = {
     "Almadies": ["Grand Dakar"],
 }
 
+# Arrêts principaux : demande (personnes qui arrivent à l'arrêt par heure) et passages de bus par heure
+STOPS = [
+    {"arret": "Place de l'Indépendance", "zone": "Dakar Plateau", "ligne": "Ligne 01", "demande_par_heure": 415, "bus_par_heure": 6},
+    {"arret": "Gare routière Petersen", "zone": "Dakar Plateau", "ligne": "Ligne 05", "demande_par_heure": 455, "bus_par_heure": 8},
+    {"arret": "Marché Sandaga", "zone": "Dakar Plateau", "ligne": "Ligne 01", "demande_par_heure": 250, "bus_par_heure": 6},
+    {"arret": "Rond-point Colobane", "zone": "Grand Dakar", "ligne": "Ligne 03", "demande_par_heure": 590, "bus_par_heure": 7},
+    {"arret": "Stade Iba Mar Diop", "zone": "Grand Dakar", "ligne": "Ligne 14", "demande_par_heure": 180, "bus_par_heure": 5},
+    {"arret": "Liberté 6", "zone": "Grand Dakar", "ligne": "Ligne 03", "demande_par_heure": 355, "bus_par_heure": 7},
+    {"arret": "Ngor Village", "zone": "Almadies", "ligne": "Ligne 08", "demande_par_heure": 95, "bus_par_heure": 4},
+    {"arret": "Route des Almadies", "zone": "Almadies", "ligne": "Ligne 08", "demande_par_heure": 130, "bus_par_heure": 4},
+]
+
 
 def zones() -> list[str]:
     return list(TRAFFIC)
@@ -42,3 +54,7 @@ def fleet(zone: str) -> Optional[dict]:
 
 def neighbors(zone: str) -> list[str]:
     return NEIGHBORS.get(zone, [])
+
+
+def stops() -> list[dict]:
+    return [dict(s) for s in STOPS]

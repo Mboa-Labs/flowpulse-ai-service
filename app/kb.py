@@ -83,3 +83,69 @@ def search(question: str, n: int = 5, collection: str = "kb_reglementaire",
         Passage.from_chroma(doc, meta, dist, collection)
         for doc, meta, dist in zip(result["documents"][0], result["metadatas"][0], result["distances"][0])
     ]
+
+
+def documents() -> list[dict]:
+    """Inventaire de sources.csv, avec le nombre de passages indexés par document."""
+    import csv
+
+    manifest = settings.chroma_dir.parent / "sources.csv"
+    if not manifest.exists():
+        return []
+    counts: dict[str, int] = {}
+    try:
+        for name in COLLECTIONS:
+            try:
+                metas = _client().get_collection(name).get(include=["metadatas"])["metadatas"] or []
+            except Exception:
+                continue
+            for m in metas:
+                doc = m.get("doc_id", "")
+                counts[doc] = counts.get(doc, 0) + 1
+    except Exception:
+        pass
+    with manifest.open(encoding="utf-8") as f:
+        rows = list(csv.DictReader(f))
+    return [
+        {
+            "id": r["id"], "titre": r["titre"], "reference": r["reference"], "type": r["type"],
+            "domaine": r["domaine"], "pays": r["pays"], "statut": r["statut"], "fichier": r["fichier"],
+            "url_source": r["url_source"], "notes": r["notes"], "passages": counts.get(r["id"], 0),
+        }
+        for r in rows
+    ]
+
+
+INDEXATION: dict = {"etat": "inactive", "debut": None, "fin": None, "journal": ""}
+
+
+def reindex(include_all: bool = True) -> dict:
+    """Relance scripts/ingest.py en tâche de fond (embeddings Ollama) ; l'état se lit dans INDEXATION."""
+    import subprocess
+    import sys
+    import threading
+    import time
+
+    if INDEXATION["etat"] == "en_cours":
+        return INDEXATION
+    script = settings.chroma_dir.parent / "scripts" / "ingest.py"
+    if not script.exists():
+        raise FileNotFoundError(f"Script d'indexation introuvable : {script}")
+    cmd = [sys.executable, str(script)] + (["--all"] if include_all else [])
+    env = {**__import__("os").environ, "FLOWPULSE_CHROMA_DIR": str(settings.chroma_dir),
+           "FLOWPULSE_OLLAMA_URL": settings.ollama_url, "FLOWPULSE_EMBED_MODEL": settings.embed_model,
+           "PYTHONIOENCODING": "utf-8"}
+    INDEXATION.update(etat="en_cours", debut=time.time(), fin=None, journal="")
+
+    def worker():
+        try:
+            out = subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8", errors="replace", env=env, timeout=3600)
+            INDEXATION.update(etat="terminee" if out.returncode == 0 else "echec", journal=(out.stdout + out.stderr)[-4000:])
+        except Exception as e:
+            INDEXATION.update(etat="echec", journal=str(e))
+        finally:
+            INDEXATION["fin"] = time.time()
+            _client.cache_clear()
+
+    threading.Thread(target=worker, daemon=True).start()
+    return INDEXATION

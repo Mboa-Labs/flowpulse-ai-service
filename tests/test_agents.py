@@ -184,3 +184,30 @@ def test_tout_est_conserve_apres_un_redemarrage(no_kb):
         assert client.get(f"/ai/traces/{trace_id}").json()["etapes"]
     finally:
         persistence.init(None)
+
+
+def test_alerte_acquittee_puis_transmise_avec_plan(no_kb):
+    client = TestClient(app)
+    alerte = client.post("/ai/watcher/run").json()["alertes"][0]
+    assert alerte["statut"] == "NOUVELLE" and alerte["plan_contingence"]
+    url = f"/ai/alerts/{alerte['id']}/action"
+    assert client.post(url, json={"action": "acquitter", "par": "gest@x"}).json()["statut"] == "ACQUITTEE"
+    assert client.post(url, json={"action": "acquitter", "par": "gest@x"}).status_code == 409
+    assert client.post(url, json={"action": "transmettre", "par": "gest@x"}).status_code == 422
+    t = client.post(url, json={"action": "transmettre", "par": "gest@x", "destinataire": "Police municipale"}).json()
+    assert t["statut"] == "TRANSMISE" and len(t["historique"]) == 2
+    assert client.get("/ai/watcher/last").json()["alertes"][0]["statut"] == "TRANSMISE"
+    assert client.post("/ai/alerts/A-inconnue/action", json={"action": "acquitter", "par": "x"}).status_code == 404
+
+
+def test_tension_par_arret():
+    arrets = TestClient(app).get("/ai/stops").json()
+    assert arrets[0]["tension"] >= arrets[-1]["tension"]
+    colobane = next(a for a in arrets if a["arret"] == "Rond-point Colobane")
+    assert colobane["offre_par_heure"] == 7 * 60 and colobane["niveau"] == "SATURE"
+
+
+def test_inventaire_de_la_base_de_connaissances():
+    d = TestClient(app).get("/ai/kb/documents").json()
+    assert len(d["documents"]) >= 20 and {"id", "statut", "passages"} <= set(d["documents"][0])
+    assert d["indexation"]["etat"] in ("inactive", "en_cours", "terminee", "echec")

@@ -91,6 +91,13 @@ class ScenarioIn(BaseModel):
     nb_bus: int = Field(0, ge=0, le=50)
 
 
+class AlertAction(BaseModel):
+    action: Literal["acquitter", "transmettre"]
+    par: str = Field(..., min_length=1, max_length=120)
+    destinataire: Optional[str] = Field(None, max_length=120)
+    note: Optional[str] = Field(None, max_length=500)
+
+
 class Decision(BaseModel):
     decision: Literal["appliquer", "rejeter"]
     motif: Optional[str] = None
@@ -145,6 +152,52 @@ def get_simulation(sim_id: str) -> dict:
     if sim is None:
         raise HTTPException(404, "Simulation introuvable")
     return sim
+
+
+@app.post("/ai/alerts/{alert_id}/action")
+def alert_action(alert_id: str, body: AlertAction) -> dict:
+    """Acquittement ou transmission d'une alerte (le backend fournit l'auteur et journalise)."""
+    if body.action == "transmettre" and not body.destinataire:
+        raise HTTPException(422, "Indiquez à qui transmettre l'alerte")
+    try:
+        return watcher.update_alert(alert_id, body.action, body.par, body.destinataire, body.note)
+    except KeyError:
+        raise HTTPException(404, "Alerte introuvable dans la dernière surveillance")
+    except ValueError as e:
+        raise HTTPException(409, str(e))
+
+
+@app.get("/ai/stops")
+def stops() -> list[dict]:
+    """Offre et demande par arrêt : tension = demande / capacité offerte (F2.1)."""
+    out = []
+    for s in data.stops():
+        capacite = (data.fleet(s["zone"]) or {}).get("capacite", 60)
+        offre = s["bus_par_heure"] * capacite
+        tension = round(s["demande_par_heure"] / offre * 100)
+        attente = round(60 / s["bus_par_heure"] / 2 * max(1, tension / 100), 1)
+        out.append({**s, "offre_par_heure": offre, "tension": tension, "attente_min": attente,
+                    "niveau": "SATURE" if tension >= 100 else "DENSE" if tension >= 80 else "FLUIDE"})
+    return sorted(out, key=lambda s: s["tension"], reverse=True)
+
+
+@app.get("/ai/kb/documents")
+def kb_documents() -> dict:
+    """Inventaire de la base de connaissances et état de la dernière indexation."""
+    try:
+        collections = kb.stats()
+    except Exception:
+        collections = {c: 0 for c in kb.COLLECTIONS}
+    return {"documents": kb.documents(), "collections": collections, "indexation": kb.INDEXATION}
+
+
+@app.post("/ai/kb/reindex")
+def kb_reindex() -> dict:
+    """Relance l'indexation des textes (quelques minutes, nécessite Ollama et nomic-embed-text)."""
+    try:
+        return kb.reindex()
+    except FileNotFoundError as e:
+        raise HTTPException(503, str(e))
 
 
 @app.get("/ai/recommendations")
