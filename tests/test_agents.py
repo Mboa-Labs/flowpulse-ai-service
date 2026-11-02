@@ -55,9 +55,9 @@ def test_watcher_alerte_et_propose_sans_jamais_appliquer(no_kb):
     assert len(recos) == 2
     assert all(r.statut == "PROPOSEE" for r in recos)
     assert {r.zone: r.nb_bus for r in recos} == {"Dakar Plateau": 2, "Grand Dakar": 3}
-    # Sans texte applicable : verdict NON_COUVERT et manque réglementaire enregistré
+    # Sans texte applicable : verdict NON_COUVERT et un seul manque (les deux zones relèvent des mêmes textes)
     assert all(r.conformite == "NON_COUVERT" for r in recos)
-    assert len(store.GAPS) == 2
+    assert len(store.GAPS) == 1
     assert store.TRACES[trace_id].etapes
 
 
@@ -259,3 +259,18 @@ def test_donnees_reelles_et_horloge(no_kb, donnees_reelles):
     assert client.post("/ai/horloge", json={"t": "2013-06-01T10:00"}).status_code == 422
     serie = client.get("/ai/zones/serie", params={"zone": "Grand Dakar", "heures": 3}).json()
     assert [p["observe"] for p in serie] == [40, 40, 40, 92]
+
+
+def test_verdict_reutilise_pour_un_meme_type_de_decision(monkeypatch):
+    monkeypatch.setattr(kb, "search", lambda *a, **k: [passage(), passage(), passage(), passage("CMR-TEL-001", 0.7)])
+    fake = FakeLLM([AIMessage(content=json.dumps({"verdict": "CONFORME", "justification": "Article 12.", "citations": [1]}))])
+    monkeypatch.setattr(llm, "get_llm", lambda json_mode=False: fake)
+    store.start_trace("test")
+    premier = policy.check("Renfort de 2 bus à Grand Dakar", "reaffectation_bus_reserve")
+    second = policy.check("Renfort de 3 bus à Almadies", "reaffectation_bus_reserve")
+    assert premier.verdict == second.verdict == "CONFORME" and second.citations == premier.citations
+    assert len(fake.received) == 1  # le modèle n'a lu les textes qu'une fois
+    assert store.current_trace().etapes[-1].action == "verdict_reutilise"
+    # Au plus 2 extraits d'un même document
+    retenus = policy._selection([passage(), passage(), passage(), passage("CMR-TEL-001", 0.7)])
+    assert [p.doc_id for p in retenus] == ["CMR-DEC-001", "CMR-DEC-001", "CMR-TEL-001"]

@@ -62,6 +62,7 @@ RECOMMENDATIONS: dict[str, Recommendation] = {}
 GAPS: dict[str, Gap] = {}
 SIMULATIONS: dict[str, dict] = {}
 STATE: dict[str, dict] = {}  # états divers, par exemple la dernière surveillance
+POLICY_CACHE: dict[str, dict] = {}  # verdicts de conformité par type de décision (mémoire seulement)
 
 _dirty: set[tuple[str, str]] = set()
 
@@ -170,4 +171,5 @@ def reset() -> None:
     GAPS.clear()
     SIMULATIONS.clear()
     STATE.clear()
+    POLICY_CACHE.clear()
     _dirty.clear()

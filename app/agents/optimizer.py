@@ -39,7 +39,8 @@ def propose(zone: str, ligne: Optional[str] = None, nb_bus: Optional[int] = None
     )
     store.record("optimizer", "calcul_plan", {"zone": zone, "ligne": ligne, "demande": nb_bus}, description, started)
 
-    verdict = policy.check(f"Réaffectation de bus de réserve sur une ligne urbaine : {description}")
+    verdict = policy.check(f"Réaffectation de bus de réserve sur une ligne urbaine : {description}",
+                           type_decision="reaffectation_bus_reserve")
     trace = store.current_trace()
     reco = store.Recommendation(
         id=store.new_id("R"),

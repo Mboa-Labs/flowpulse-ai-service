@@ -131,17 +131,19 @@ def run(scenario: Scenario) -> dict:
     store.record("simulator", "indicateurs", scenario.libelle(), indicateurs, started)
 
     # Mesures d'accompagnement : renfort là où une zone sature, puis vérification réglementaire
-    a_verifier = [scenario.libelle()] if scenario.type != "renfort" else []
+    # (décision, type de décision) : les décisions d'un même type relèvent des mêmes textes
+    a_verifier = [(scenario.libelle(), f"scenario_{scenario.type}")] if scenario.type != "renfort" else []
     for etat in apres:
         flotte = data.fleet(etat["zone"]) or {}
         if etat["niveau"] != "SATURE" or not flotte.get("bus_en_reserve"):
             continue
         nb = optimizer.buses_needed(etat["niveau_congestion"], flotte["bus_en_reserve"])
         if nb:
-            a_verifier.append(f"Renfort de {nb} bus de réserve sur la {flotte['lignes_actives'][0]} à {etat['zone']} de {scenario.debut} à {scenario.fin}")
+            a_verifier.append((f"Renfort de {nb} bus de réserve sur la {flotte['lignes_actives'][0]} à {etat['zone']} "
+                               f"de {scenario.debut} à {scenario.fin}", "reaffectation_bus_reserve"))
     mesures = []
-    for decision in a_verifier:
-        verdict = policy.check(decision)
+    for decision, type_decision in a_verifier:
+        verdict = policy.check(decision, type_decision)
         mesures.append({"description": decision, "verdict": verdict.verdict, "justification": verdict.justification, "citations": verdict.citations})
 
     for e in avant + apres:
