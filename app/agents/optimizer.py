@@ -29,7 +29,9 @@ def propose(zone: str, ligne: Optional[str] = None, nb_bus: Optional[int] = None
         raise ValueError(f"Zone inconnue : {zone}. Zones disponibles : {', '.join(data.zones())}.")
 
     ligne = ligne if ligne in flotte["lignes_actives"] else flotte["lignes_actives"][0]
-    besoin = buses_needed(trafic["niveau_congestion"], flotte["bus_en_reserve"])
+    # Le besoin se calcule sur la tension attendue : la plus forte entre maintenant et la prévision à 1 h
+    tension = max(trafic["niveau_congestion"], trafic.get("prevision_1h") or 0)
+    besoin = buses_needed(tension, flotte["bus_en_reserve"])
     nb = besoin if nb_bus is None else max(0, min(int(nb_bus), flotte["bus_en_reserve"]))
     description = (
         f"Déplacer {nb} bus de la réserve vers la {ligne} à {zone} "

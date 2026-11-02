@@ -21,6 +21,7 @@ from app.config import settings
 @asynccontextmanager
 async def lifespan(_: FastAPI):
     persistence.init(persistence.connect(settings.database_url))
+    data.activer(settings.donnees_dir)
     yield
     persistence.flush()
 
@@ -103,14 +104,50 @@ class Decision(BaseModel):
     motif: Optional[str] = None
 
 
+class HorlogeIn(BaseModel):
+    t: str = Field(..., pattern=r"^2013-\d{2}-\d{2}[T ]\d{2}(:\d{2})?$")
+
+
 @app.get("/ai/zones")
 def zones() -> list[dict]:
-    """Vue d'ensemble par zone : trafic, flotte et niveau d'alerte (données de démonstration)."""
+    """Vue d'ensemble par zone à l'heure de l'horloge : tension, prévision, flotte, position et niveau d'alerte."""
     out = []
     for z in data.zones():
         t, f = data.traffic(z), data.fleet(z)
-        out.append({"zone": z, **t, **(f or {}), "niveau": watcher.level(t["niveau_congestion"]) or "FLUIDE"})
+        if t is None:
+            continue
+        out.append({"zone": z, **t, **(f or {}), **(data.position(z) or {}),
+                    "niveau": watcher.level(t["niveau_congestion"]) or "FLUIDE"})
     return out
+
+
+@app.get("/ai/zones/serie")
+def zone_serie(zone: str, heures: int = Query(24, ge=1, le=168)) -> list[dict]:
+    """Indice observé sur les dernières heures et prévisions du modèle à 1 h et 2 h, pour une zone."""
+    if zone not in data.zones():
+        raise HTTPException(404, "Zone inconnue")
+    return data.historique(zone, heures)
+
+
+@app.get("/ai/horloge")
+def get_horloge() -> dict:
+    """Source des données et, pour les données réelles, l'instant de 2013 rejoué et les journées proposées."""
+    from app.agents import reel
+
+    if data.REEL is None:
+        return {"source": data.source(), "t": None, "journees": []}
+    return {"source": data.source(), "t": data.horloge(), "debut": data.REEL.debut, "fin": data.REEL.fin,
+            "journees": reel.JOURNEES, "modele": bool(data.REEL.seuils), "seuils_alerte": data.REEL.seuils}
+
+
+@app.post("/ai/horloge")
+def set_horloge(body: HorlogeIn) -> dict:
+    """Change l'instant rejoué ; les écrans et les agents travaillent alors sur ce moment de 2013."""
+    try:
+        data.regler_horloge(body.t)
+    except ValueError as e:
+        raise HTTPException(422, str(e))
+    return get_horloge()
 
 
 @app.post("/ai/assistant")

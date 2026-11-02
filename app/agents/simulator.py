@@ -63,7 +63,7 @@ def _etat(zone: str, vph: float, capacite: float, vitesse_ref: float, tf_ref: fl
         "charge": round(charge),
         "surcharge": charge > 100,
         "vehicules_par_heure": round(vph),
-        "vitesse_moyenne": round(vitesse_ref * tf_ref / tf, 1),
+        "vitesse_moyenne": round(vitesse_ref * tf_ref / tf, 1) if vitesse_ref else None,
         "niveau": watcher.level(round(congestion)) or "FLUIDE",
         "_tf": tf,
         "_charge": charge,

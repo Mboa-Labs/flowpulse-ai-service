@@ -16,14 +16,18 @@ from app.agents import data, optimizer, store
 
 @tool
 def get_traffic_data(zone_name: str) -> str:
-    """Récupère les métriques de trafic (vitesse, congestion, flux) pour une zone géographique."""
+    """Récupère l'état de mobilité d'une zone : indice de tension, prévision à 1 h et 2 h, activité et déplacements."""
     started = time.perf_counter()
     t = data.traffic(zone_name)
-    out = (
-        f"Aucune donnée pour la zone {zone_name}. Zones disponibles : {', '.join(data.zones())}."
-        if t is None
-        else f"Zone: {zone_name} | Vitesse: {t['vitesse_moyenne']} km/h | Congestion: {t['niveau_congestion']}% | Flux: {t['vehicules_par_heure']} véh/h"
-    )
+    if t is None:
+        out = f"Aucune donnée pour la zone {zone_name}. Zones disponibles : {', '.join(data.zones())}."
+    elif t.get("source") == "d4d":
+        prev = (f" | Prévu dans 1 h: {t['prevision_1h']:.0f}/100, dans 2 h: {t['prevision_2h']:.0f}/100"
+                if t.get("prevision_1h") is not None and t.get("prevision_2h") is not None else "")
+        out = (f"Zone: {zone_name} | Heure: {t['heure']} | Congestion: {t['niveau_congestion']}% (indice de tension)"
+               f"{prev} | Appels: {t['appels']}/h | Déplacements (échantillon): {t['arrivees']} arrivées, {t['departs']} départs")
+    else:
+        out = f"Zone: {zone_name} | Vitesse: {t['vitesse_moyenne']} km/h | Congestion: {t['niveau_congestion']}% | Flux: {t['vehicules_par_heure']} véh/h"
     store.record("outil", "get_traffic_data", zone_name, out, started)
     return out
 

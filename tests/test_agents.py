@@ -7,7 +7,7 @@ from fastapi.testclient import TestClient
 from langchain_core.messages import AIMessage, ToolMessage
 
 from app import kb
-from app.agents import llm, optimizer, orchestrator, policy, store, watcher
+from app.agents import data, llm, optimizer, orchestrator, policy, store, watcher
 from app.main import app
 
 
@@ -224,3 +224,38 @@ def test_une_seule_recommandation_en_attente_par_zone(no_kb):
     assert sum(r["statut"] == "PROPOSEE" for r in recos.values()) == 2
     # Une recommandation remplacée ne peut plus être appliquée
     assert client.post(f"/ai/recommendations/{premiere['Grand Dakar']}/decision", json={"decision": "appliquer"}).status_code == 409
+
+
+@pytest.fixture
+def donnees_reelles(tmp_path, monkeypatch):
+    """Petites sorties de pipeline fictives : 2 zones, 3 jours, sans modèle de prévision."""
+    import pandas as pd
+
+    t = pd.date_range("2013-11-11", "2013-11-13 23:00", freq="h")
+    lignes = []
+    for arr_id, zone, pic in ((3, "Grand Dakar", 92), (4, "Dakar Plateau", 70)):
+        indice = [pic if h.hour == 18 else 40 for h in t]
+        lignes.append(pd.DataFrame({"t": t, "arr_id": arr_id, "zone": zone, "appels": [i * 100 for i in indice],
+                                    "antennes_actives": 70, "presents_echantillon": 500, "arrivees": 50, "departs": 40,
+                                    "indice_tension": indice, "ecart_habituel": 1.0}))
+    pd.concat(lignes).to_parquet(tmp_path / "serie_zone_heure.parquet", index=False)
+    (tmp_path / "zones_dakar.csv").write_text(
+        "arr_id;zone;departement;antennes;lon;lat\n3;Grand Dakar;DAKAR;73;-17.45;14.70\n4;Dakar Plateau;DAKAR;74;-17.43;14.67\n",
+        encoding="utf-8")
+    assert data.activer(tmp_path)
+    yield
+    monkeypatch.setattr(data, "REEL", None)
+
+
+def test_donnees_reelles_et_horloge(no_kb, donnees_reelles):
+    client = TestClient(app)
+    assert client.get("/ai/horloge").json()["source"] == "d4d"
+    assert client.post("/ai/horloge", json={"t": "2013-11-12T18:00"}).json()["t"] == "2013-11-12T18:00"
+    zones = {z["zone"]: z for z in client.get("/ai/zones").json()}
+    assert zones["Grand Dakar"]["niveau_congestion"] == 92 and zones["Grand Dakar"]["lon"] == -17.45
+    alertes = client.post("/ai/watcher/run").json()["alertes"]
+    assert [a["zone"] for a in alertes] == ["Grand Dakar"] and alertes[0]["heure"] == "2013-11-12T18:00"
+    # Hors période ou heure inconnue : refusé
+    assert client.post("/ai/horloge", json={"t": "2013-06-01T10:00"}).status_code == 422
+    serie = client.get("/ai/zones/serie", params={"zone": "Grand Dakar", "heures": 3}).json()
+    assert [p["observe"] for p in serie] == [40, 40, 40, 92]

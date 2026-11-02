@@ -15,6 +15,8 @@ class Settings(BaseSettings):
     backend_url: str = "http://localhost:8080"
     # PostgreSQL pour conserver traces, recommandations, manques et simulations ; vide = en mémoire
     database_url: str = ""
+    # Sorties du pipeline D4D (séries, zones, modèles) ; absentes = données de démonstration
+    donnees_dir: Path = Path(__file__).resolve().parents[1] / "pipeline" / "sortie"
 
 
 settings = Settings()

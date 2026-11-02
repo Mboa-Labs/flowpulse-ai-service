@@ -22,19 +22,25 @@ class Alert:
     zone: str
     niveau: str  # DENSE ou SATURE
     congestion: int
-    vitesse_moyenne: float
+    vitesse_moyenne: Optional[float]
     recommendation_id: Optional[str]
     id: str = ""
+    prevision_1h: Optional[float] = None
+    prevision_2h: Optional[float] = None
+    prevue: bool = False  # vraie si l'alerte vient de la prévision du modèle et non de l'état actuel
+    heure: Optional[str] = None  # instant de la donnée (horloge de démonstration)
     statut: str = "NOUVELLE"  # NOUVELLE, ACQUITTEE, TRANSMISE
     plan_contingence: list[str] = field(default_factory=list)
     historique: list[dict] = field(default_factory=list)
 
 
-def contingence(zone: str, niveau: str, nb_bus: int) -> list[str]:
+def contingence(zone: str, niveau: str, nb_bus: int, prevue: bool = False) -> list[str]:
     """Plan de contingence type : actions déterministes, à adapter par le gestionnaire."""
     flotte = data.fleet(zone) or {}
     lignes = ", ".join(flotte.get("lignes_actives", [])) or "les lignes de la zone"
     plan = [f"Prévenir l'exploitant des lignes {lignes} et la régulation de la circulation."]
+    if prevue:
+        plan.insert(0, "Saturation prévue dans l'heure par le modèle : agir avant le pic.")
     if nb_bus:
         plan.append(f"Engager {nb_bus} bus de réserve (recommandation à valider dans Flotte).")
     if niveau == "SATURE":
@@ -57,17 +63,31 @@ def level(congestion: int) -> Optional[str]:
 def run() -> tuple[str, list[Alert]]:
     trace = store.start_trace("surveillance")
     alerts: list[Alert] = []
+    seuil = data.seuil_prevision("1h")
     for zone in data.zones():
         started = time.perf_counter()
         t = data.traffic(zone)
+        if t is None:
+            store.record("watcher", "analyse_zone", zone, "aucune donnée à cet instant", started)
+            continue
         niveau = level(t["niveau_congestion"])
-        store.record("watcher", "analyse_zone", zone, niveau or "normal", started)
+        # Anticipation : le modèle prévoit une saturation dans l'heure alors que la zone n'est pas encore saturée
+        p1 = t.get("prevision_1h")
+        prevue = seuil is not None and p1 is not None and p1 >= seuil and niveau != "SATURE"
+        if prevue:
+            niveau = "SATURE"
+        detail = niveau or "normal"
+        if p1 is not None:
+            detail += (f" (indice {t['niveau_congestion']}, prévu {p1:.0f} dans 1 h, seuil d'alerte {seuil:.0f})"
+                       if seuil is not None else f" (prévu {p1:.0f} dans 1 h)")
+        store.record("watcher", "analyse_zone", zone, detail, started)
         if niveau is None:
             continue
         reco = optimizer.propose(zone) if niveau == "SATURE" else None
         alerts.append(Alert(
             zone, niveau, t["niveau_congestion"], t["vitesse_moyenne"], reco.id if reco else None,
-            id=store.new_id("A"), plan_contingence=contingence(zone, niveau, reco.nb_bus if reco else 0),
+            id=store.new_id("A"), plan_contingence=contingence(zone, niveau, reco.nb_bus if reco else 0, prevue),
+            prevision_1h=p1, prevision_2h=t.get("prevision_2h"), prevue=prevue, heure=t.get("heure"),
         ))
     store.set_state("derniere_surveillance", {"trace_id": trace.id, "alertes": [asdict(a) for a in alerts]})
     return trace.id, alerts

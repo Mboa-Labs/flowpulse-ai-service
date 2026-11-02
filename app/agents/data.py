@@ -1,12 +1,21 @@
-"""Données de démonstration (zones de Dakar), en attendant le pipeline alimenté par le dataset.
+"""Accès aux données de mobilité pour les agents.
 
-Le pipeline remplacera ces dictionnaires par des lectures en base ; les agents ne dépendent
-que des deux fonctions ci-dessous.
+Deux sources, mêmes fonctions : les données réelles D4D-Sénégal agrégées par le pipeline (10 arrondissements
+de Dakar, 2013, avec prévisions du modèle), sinon les données de démonstration ci-dessous (3 zones).
+Les agents n'appellent que les fonctions de ce module.
 """
 
 from __future__ import annotations
 
+import math
+from datetime import datetime, timedelta
+from pathlib import Path
 from typing import Optional
+
+from app.agents import store
+
+REEL = None  # données réelles chargées par activer()
+HORLOGE_DEFAUT = "2013-11-12T18:00"
 
 TRAFFIC = {
     "Dakar Plateau": {"vitesse_moyenne": 12.5, "niveau_congestion": 88, "vehicules_par_heure": 4500},
@@ -40,20 +49,116 @@ STOPS = [
 ]
 
 
+def activer(dossier: Path) -> bool:
+    """Charge les données réelles si le pipeline a produit ses sorties dans ce dossier."""
+    from app.agents import reel
+
+    global REEL
+    REEL = reel.charger(dossier)
+    return REEL is not None
+
+
+def source() -> str:
+    return "d4d" if REEL else "demonstration"
+
+
+def horloge() -> str:
+    """Instant de 2013 que « vit » l'application (données réelles seulement)."""
+    return store.STATE.get("horloge", {}).get("t", HORLOGE_DEFAUT)
+
+
+def regler_horloge(t: str) -> str:
+    from app.agents.reel import heure
+
+    if REEL is None:
+        raise ValueError("Horloge indisponible : données de démonstration.")
+    cle = heure(t)
+    if not (REEL.debut[:13] <= cle <= REEL.fin[:13]):
+        raise ValueError(f"Instant hors de la période des données ({REEL.debut} → {REEL.fin}).")
+    if not any(REEL.ligne(z, cle) for z in REEL.noms()):
+        raise ValueError("Aucune donnée à cet instant (heure manquante dans le dataset).")
+    store.set_state("horloge", {"t": f"{cle}:00"})
+    return f"{cle}:00"
+
+
+def _propre(v):
+    return None if v is None or (isinstance(v, float) and math.isnan(v)) else v
+
+
 def zones() -> list[str]:
-    return list(TRAFFIC)
+    return REEL.noms() if REEL else list(TRAFFIC)
 
 
 def traffic(zone: str) -> Optional[dict]:
-    return TRAFFIC.get(zone)
+    if REEL is None:
+        return TRAFFIC.get(zone)
+    if REEL.zone(zone) is None:
+        return None
+    # Heure absente (panne de collecte) : dernière heure connue, au plus 3 heures avant
+    t = datetime.fromisoformat(horloge())
+    for recul in range(4):
+        ligne = REEL.ligne(zone, (t - timedelta(hours=recul)).strftime("%Y-%m-%dT%H"))
+        if ligne:
+            break
+    else:
+        return None
+    return {
+        "niveau_congestion": int(ligne["indice_tension"]),
+        "vitesse_moyenne": None,  # le dataset ne mesure pas la vitesse
+        "vehicules_par_heure": int(ligne["arrivees"] + ligne["departs"]),  # déplacements de l'échantillon
+        "appels": int(ligne["appels"]),
+        "arrivees": int(ligne["arrivees"]),
+        "departs": int(ligne["departs"]),
+        "ecart_habituel": _propre(ligne.get("ecart_habituel")),
+        "prevision_1h": _propre(ligne.get("prevision_1h")),
+        "prevision_2h": _propre(ligne.get("prevision_2h")),
+        "heure": ligne["t"],
+        "source": "d4d",
+    }
 
 
 def fleet(zone: str) -> Optional[dict]:
-    return FLEET.get(zone)
+    if REEL is None:
+        return FLEET.get(zone)
+    from app.agents.reel import FLOTTE
+
+    if zone not in FLOTTE:
+        return None
+    lignes, reserve = FLOTTE[zone]
+    return {"lignes_actives": lignes, "bus_en_reserve": reserve, "capacite": 60}
 
 
 def neighbors(zone: str) -> list[str]:
-    return NEIGHBORS.get(zone, [])
+    return REEL.voisins.get(zone, []) if REEL else NEIGHBORS.get(zone, [])
+
+
+def position(zone: str) -> Optional[dict]:
+    z = REEL.zone(zone) if REEL else None
+    return {"lon": z["lon"], "lat": z["lat"]} if z else None
+
+
+def seuil_prevision(horizon: str = "1h") -> Optional[float]:
+    """Seuil d'alerte du modèle pour cet horizon (réglé à l'entraînement), ou None sans modèle."""
+    return REEL.seuils.get(horizon) if REEL else None
+
+
+def historique(zone: str, heures: int = 24) -> list[dict]:
+    """Observé sur les dernières heures et prévisions faites à l'heure de l'horloge."""
+    if REEL is None:
+        return []
+    t = datetime.fromisoformat(horloge())
+    out = []
+    for k in range(heures, -1, -1):
+        ligne = REEL.ligne(zone, (t - timedelta(hours=k)).strftime("%Y-%m-%dT%H"))
+        if ligne:
+            out.append({"t": ligne["t"], "observe": int(ligne["indice_tension"])})
+    actuel = REEL.ligne(zone, t.strftime("%Y-%m-%dT%H"))
+    if actuel:
+        for h in (1, 2):
+            p = _propre(actuel.get(f"prevision_{h}h"))
+            if p is not None:
+                out.append({"t": (t + timedelta(hours=h)).strftime("%Y-%m-%dT%H:00"), "prevu": int(p)})
+    return out
 
 
 def stops() -> list[dict]:
