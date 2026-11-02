@@ -3,6 +3,7 @@
 Étapes, chacune relançable seule :
   explorer   volumes, période couverte, heures manquantes, valeurs suspectes (rapport Markdown)
   agreger    nettoyage, sélection de la région de Dakar, agrégation par arrondissement et par heure
+  entrainer  modèle de prévision de l'indice de tension à 1 h et 2 h (sans le disque)
 
 Les fichiers bruts sont lus en place, compressés, sans jamais être modifiés ni copiés.
 Seuls des agrégats par zone sortent de ce script : aucune donnée individuelle.
@@ -10,6 +11,7 @@ Seuls des agrégats par zone sortent de ce script : aucune donnée individuelle.
 Usage :
   python pipeline/d4d.py explorer --source E:/data
   python pipeline/d4d.py agreger  --source E:/data
+  python pipeline/d4d.py entrainer
 """
 
 from __future__ import annotations
@@ -397,15 +399,30 @@ def agreger(source: Path) -> None:
         print(f"  - {nom} ({taille((SORTIE / nom).stat().st_size)})")
 
 
+def entrainer(_source: Path | None) -> None:
+    """Prévision de l'indice de tension par zone, à partir des séries agrégées (le disque n'est plus nécessaire)."""
+    sys.path.insert(0, str(Path(__file__).resolve().parent))
+    import modele
+
+    av = Avancement(3)
+    dossier = modele.entrainer(SORTIE, av)
+    print(f"\nEntraînement terminé en {av.total_ecoule()}. Résultats dans {dossier} :")
+    for f in sorted(dossier.glob("*")):
+        print(f"  - {f.name} ({taille(f.stat().st_size)})")
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("etape", choices=["explorer", "agreger"])
-    parser.add_argument("--source", type=Path, required=True, help="dossier data du disque (contient SET1, SET2, ContextData)")
+    parser.add_argument("etape", choices=["explorer", "agreger", "entrainer"])
+    parser.add_argument("--source", type=Path, help="dossier data du disque (contient SET1, SET2, ContextData) ; "
+                                                     "inutile pour « entrainer »")
     parser.add_argument("--sortie", type=Path, default=SORTIE, help=f"dossier des résultats (défaut : {SORTIE})")
     args = parser.parse_args()
+    if args.etape != "entrainer" and args.source is None:
+        parser.error(f"l'étape « {args.etape} » a besoin de --source (le dossier data du disque)")
     globals()["SORTIE"] = args.sortie
     sys.stdout.reconfigure(encoding="utf-8")  # barres et accents corrects dans la console Windows
-    {"explorer": explorer, "agreger": agreger}[args.etape](args.source)
+    {"explorer": explorer, "agreger": agreger, "entrainer": entrainer}[args.etape](args.source)
 
 
 if __name__ == "__main__":

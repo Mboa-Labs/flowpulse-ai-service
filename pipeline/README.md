@@ -48,7 +48,7 @@ Toutes les commandes se lancent dans PowerShell, **depuis le dossier du dépôt 
    python -m pip install -r requirements.txt
    ```
 
-5. Installer la dépendance du pipeline (DuckDB, environ 20 Mo) :
+5. Installer les dépendances du pipeline (DuckDB, pandas, pyarrow, LightGBM : environ 60 Mo, de 5 à 15 minutes avec une connexion lente) :
 
    ```powershell
    python -m pip install --default-timeout=120 --retries 10 -r pipeline\requirements.txt
@@ -170,6 +170,56 @@ L'**indice de tension** (0 à 100) rapporte l'activité de l'heure au haut nivea
 
 Aucun de ces fichiers ne contient de donnée individuelle : uniquement des totaux par zone et par heure.
 
+## Étape 5 : entraîner le modèle de prévision
+
+Nécessite l'étape 4. **Le disque n'est plus nécessaire** : l'entraînement part de `serie_zone_heure.parquet`. Aucune carte graphique n'est utile ; un ordinateur portable suffit (moins de 1 Go de mémoire).
+
+Ce que fait l'étape :
+- **Caractéristiques :** pour chaque zone et chaque heure, ce que l'on sait à cet instant : heure, jour, mois, jour particulier (fêtes, Magal), indice des dernières heures et de la semaine précédente, déplacements, tension moyenne de la région.
+- **Apprentissage :** un modèle LightGBM par horizon (1 h et 2 h d'avance), appris de janvier à septembre 2013, réglé sur octobre.
+- **Évaluation :** sur **novembre et décembre**, des semaines que le modèle n'a jamais vues, face à deux références simples : « comme maintenant » et « comme la semaine dernière à la même heure ».
+
+1. Se placer dans le dossier du dépôt et activer l'environnement (inutile si `(.venv)` est déjà affiché) :
+
+   ```powershell
+   cd "<chemin vers>\flowpulse-ai-service"
+   ```
+
+   ```powershell
+   .venv\Scripts\Activate.ps1
+   ```
+
+2. Régler l'encodage du terminal :
+
+   ```powershell
+   $env:PYTHONIOENCODING = "utf-8"
+   ```
+
+3. Lancer l'entraînement (pas besoin de `--source`) :
+
+   ```powershell
+   python -I pipeline\d4d.py entrainer
+   ```
+
+- **Durée :** de 1 à 5 minutes.
+
+### Où sont les résultats
+
+Dans `pipeline\sortie\modele\` :
+
+| Fichier | Format | Contenu | S'ouvre avec |
+| --- | --- | --- | --- |
+| `modele_d4d.md` | Markdown | Le rapport : erreur moyenne du modèle et des références, alertes détectées et justes, résultats par zone, facteurs les plus utilisés | VS Code, GitHub |
+| `importance_caracteristiques.csv` | CSV (`;`) | Poids de chaque facteur dans les prévisions, par horizon | Excel |
+| `tension_1h.txt`, `tension_2h.txt` | Texte (LightGBM) | Les modèles entraînés, rechargés par le service IA | Python (LightGBM) |
+| `metadonnees.json` | JSON | Caractéristiques utilisées, périodes, jours particuliers, tous les résultats | Éditeur de texte, Python |
+| `predictions_test.parquet` | Parquet | Prévisions et valeurs observées sur novembre-décembre, pour les graphiques et la démonstration | Python |
+
+**Comment lire les résultats :**
+- *Erreur moyenne* : écart moyen entre l'indice prévu et l'indice observé, en points sur 100. Plus c'est bas, mieux c'est.
+- *Alertes détectées* : part des vraies saturations (indice ≥ 85) que le modèle avait annoncées.
+- *Alertes justes* : part des alertes annoncées qui se sont réellement produites.
+
 ## En cas de problème
 
 | Message | Cause | Solution |
@@ -178,5 +228,7 @@ Aucun de ces fichiers ne contient de donnée individuelle : uniquement des totau
 | `No files found that match the pattern` | Mauvais chemin du disque | Vérifier la lettre du lecteur et le dossier `data` |
 | `Out of Memory` | Mémoire de l'ordinateur insuffisante | Fermer les autres applications et relancer |
 | `Résumé SET1 introuvable` | L'étape 3 n'a pas été lancée | Lancer d'abord `explorer` |
+| `Séries introuvables` | L'étape 4 n'a pas été lancée | Lancer d'abord `agreger` |
+| `pandas manquant` ou `lightgbm manquant` | Dépendances du pipeline non installées | Étape 1, point 5 |
 | Les résultats doivent aller ailleurs | Autre dossier souhaité | Ajouter `--sortie <dossier>` à la commande |
 | Caractères bizarres dans le terminal | Encodage de la console | Relancer la commande `$env:PYTHONIOENCODING = "utf-8"` |
