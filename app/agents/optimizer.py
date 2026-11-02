@@ -51,5 +51,11 @@ def propose(zone: str, ligne: Optional[str] = None, nb_bus: Optional[int] = None
         citations=verdict.citations,
         trace_id=trace.id if trace else None,
     )
+    # Une seule proposition en attente par zone : la précédente est remplacée, pas supprimée (traçabilité)
+    for old in store.RECOMMENDATIONS.values():
+        if old.zone == zone and old.statut == "PROPOSEE":
+            old.statut = "REMPLACEE"
+            old.justification = f"{old.justification} Remplacée par {reco.id}.".strip()
+            store.mark("recommandation", old.id)
     store.put_recommendation(reco)
     return reco

@@ -41,7 +41,7 @@ class Recommendation:
     ligne: str
     nb_bus: int
     description: str
-    statut: str  # PROPOSEE, APPROUVEE, REJETEE, APPLIQUEE, BLOQUEE
+    statut: str  # PROPOSEE, APPROUVEE, REJETEE, APPLIQUEE, BLOQUEE, REMPLACEE
     conformite: str  # CONFORME, CONFORME_SOUS_RESERVE, NON_CONFORME, NON_COUVERT
     justification: str
     citations: list[dict]

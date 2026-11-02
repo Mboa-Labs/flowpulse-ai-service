@@ -211,3 +211,16 @@ def test_inventaire_de_la_base_de_connaissances():
     d = TestClient(app).get("/ai/kb/documents").json()
     assert len(d["documents"]) >= 20 and {"id", "statut", "passages"} <= set(d["documents"][0])
     assert d["indexation"]["etat"] in ("inactive", "en_cours", "terminee", "echec")
+
+
+def test_une_seule_recommandation_en_attente_par_zone(no_kb):
+    client = TestClient(app)
+    premiere = {a["zone"]: a["recommendation_id"] for a in client.post("/ai/watcher/run").json()["alertes"]}
+    seconde = {a["zone"]: a["recommendation_id"] for a in client.post("/ai/watcher/run").json()["alertes"]}
+    recos = {r["id"]: r for r in client.get("/ai/recommendations").json()}
+    for zone, rid in premiere.items():
+        assert recos[rid]["statut"] == "REMPLACEE" and seconde[zone] in recos[rid]["justification"]
+        assert recos[seconde[zone]]["statut"] == "PROPOSEE"
+    assert sum(r["statut"] == "PROPOSEE" for r in recos.values()) == 2
+    # Une recommandation remplacée ne peut plus être appliquée
+    assert client.post(f"/ai/recommendations/{premiere['Grand Dakar']}/decision", json={"decision": "appliquer"}).status_code == 409
