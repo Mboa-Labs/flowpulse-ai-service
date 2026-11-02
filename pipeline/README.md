@@ -166,7 +166,7 @@ Dans le même dossier `pipeline\sortie\` :
 | `serie_zone_heure.parquet` | Parquet | La même série, pour le modèle de prévision et le service IA | Python |
 | `flux_zone_heure.parquet` | Parquet | Déplacements par heure entre zones (origine → destination, zone 0 = hors Dakar) | Python |
 
-L'**indice de tension** (0 à 100) rapporte l'activité de l'heure au haut niveau habituel de la zone (99e centile de l'année). C'est un **indicateur de tension de mobilité** tiré de l'activité téléphonique, pas une mesure directe du trafic routier. L'**écart habituel** compare l'heure à la médiane de la zone pour le même jour et la même heure (1 = habituel) : il fait ressortir les événements.
+L'**indice de tension** (0 à 100) rapporte l'activité de l'heure au haut niveau habituel de la zone (99e centile de janvier à septembre, la période d'apprentissage du modèle : rien ne fuit des mois d'évaluation). C'est un **indicateur de tension de mobilité** tiré de l'activité téléphonique, pas une mesure directe du trafic routier. L'**écart habituel** compare l'heure à la médiane de la zone pour le même jour et la même heure (1 = habituel) : il fait ressortir les événements.
 
 Aucun de ces fichiers ne contient de donnée individuelle : uniquement des totaux par zone et par heure.
 
@@ -219,6 +219,7 @@ Dans `pipeline\sortie\modele\` :
 - *Erreur moyenne* : écart moyen entre l'indice prévu et l'indice observé, en points sur 100. Plus c'est bas, mieux c'est.
 - *Alertes détectées* : part des vraies saturations (indice ≥ 85) que le modèle avait annoncées.
 - *Alertes justes* : part des alertes annoncées qui se sont réellement produites.
+- *Seuil d'alerte du modèle* : un modèle de prévision lisse les pics (il annonce 82 quand la réalité monte à 88). Son seuil d'alerte est donc réglé sur octobre pour annoncer au moins 75 % des saturations ; le rapport montre aussi le résultat avec le seuil brut de 85.
 
 ## En cas de problème
 

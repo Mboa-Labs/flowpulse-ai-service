@@ -23,9 +23,13 @@ except ModuleNotFoundError:
 HORIZONS = (1, 2)  # heures d'avance
 SEUIL_ALERTE = 85  # indice à partir duquel FlowPulse lève une alerte « saturé »
 
+RAPPEL_VISE = 0.75  # part des saturations à annoncer ; le seuil d'alerte du modèle est réglé pour l'atteindre
+
+import sys  # noqa: E402
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
 # Découpage dans le temps : on apprend sur le passé, on règle sur octobre, on juge sur novembre-décembre
-FIN_APPRENTISSAGE = "2013-10-01"
-FIN_VALIDATION = "2013-11-01"
+from periodes import FIN_APPRENTISSAGE, FIN_VALIDATION  # noqa: E402
 
 # Jours particuliers au Sénégal en 2013 (fériés et grands événements religieux)
 JOURS_PARTICULIERS = {
@@ -76,10 +80,11 @@ ENTREES = [
 ]
 
 
-def mesures(vrai: np.ndarray, prevu: np.ndarray) -> dict:
+def mesures(vrai: np.ndarray, prevu: np.ndarray, seuil_prevu: float = SEUIL_ALERTE) -> dict:
+    """Erreurs en points, et qualité des alertes : une alerte est annoncée quand la prévision atteint seuil_prevu."""
     ok = ~np.isnan(vrai) & ~np.isnan(prevu)
     v, p = vrai[ok], prevu[ok]
-    alerte_v, alerte_p = v >= SEUIL_ALERTE, p >= SEUIL_ALERTE
+    alerte_v, alerte_p = v >= SEUIL_ALERTE, p >= seuil_prevu
     vrais_positifs = int((alerte_v & alerte_p).sum())
     return {
         "erreur_moyenne": round(float(np.abs(v - p).mean()), 2),  # en points d'indice
@@ -89,6 +94,18 @@ def mesures(vrai: np.ndarray, prevu: np.ndarray) -> dict:
         "alertes_justes": round(vrais_positifs / max(1, int(alerte_p.sum())), 3),  # précision
         "points": int(ok.sum()),
     }
+
+
+def regler_seuil(vrai: np.ndarray, prevu: np.ndarray) -> float:
+    """Seuil de prévision à partir duquel alerter : le plus haut qui annonce au moins RAPPEL_VISE des saturations.
+
+    Un modèle de régression lisse les pics (il prévoit 82 quand la réalité atteint 88) : alerter dès 85 prévus
+    ferait manquer des saturations. Le réglage se fait sur octobre, jamais sur les mois d'évaluation.
+    """
+    for seuil in np.arange(SEUIL_ALERTE, 59, -1):
+        if mesures(vrai, prevu, seuil)["alertes_detectees"] >= RAPPEL_VISE:
+            return float(seuil)
+    return 60.0
 
 
 def entrainer(sortie: Path, av) -> Path:
@@ -132,12 +149,16 @@ def entrainer(sortie: Path, av) -> Path:
         modele = lgb.train(parametres, jeu_app, num_boost_round=2000, valid_sets=[jeu_val],
                            callbacks=[lgb.early_stopping(100, verbose=False)])
         prevu = np.clip(modele.predict(test[ENTREES], num_iteration=modele.best_iteration), 0, 100)
+        prevu_val = np.clip(modele.predict(val[ENTREES], num_iteration=modele.best_iteration), 0, 100)
+        seuil = regler_seuil(val["cible"].to_numpy(), prevu_val)
 
         resultats[f"{h}h"] = {
-            "modele": mesures(test["cible"].to_numpy(), prevu),
+            "seuil_alerte_modele": seuil,
+            "modele": mesures(test["cible"].to_numpy(), prevu, seuil),
+            "modele_seuil_brut": mesures(test["cible"].to_numpy(), prevu),
             "reference_persistance": mesures(test["cible"].to_numpy(), test["ref_persistance"].to_numpy(dtype=float)),
             "reference_semaine": mesures(test["cible"].to_numpy(), test["ref_semaine"].to_numpy(dtype=float)),
-            "par_zone": {zones[z]: mesures(t["cible"].to_numpy(), prevu[(test["arr_id"] == z).to_numpy()])
+            "par_zone": {zones[z]: mesures(t["cible"].to_numpy(), prevu[(test["arr_id"] == z).to_numpy()], seuil)
                          for z, t in test.groupby("arr_id")},
             "arbres": int(modele.best_iteration),
         }
@@ -149,7 +170,8 @@ def entrainer(sortie: Path, av) -> Path:
         r = resultats[f"{h}h"]
         ref = min(r["reference_persistance"]["erreur_moyenne"], r["reference_semaine"]["erreur_moyenne"])
         av.barre(i, len(HORIZONS), f"à {h} h : erreur moyenne {fr(r['modele']['erreur_moyenne'])} points "
-                                   f"(meilleure référence simple : {fr(ref)})")
+                                   f"(meilleure référence simple : {fr(ref)}), alerte dès {seuil:.0f} prévus, "
+                                   f"{pc(r['modele']['alertes_detectees'])} des saturations annoncées")
     av.fin()
 
     av.etape("Fichiers et rapport")
@@ -163,7 +185,8 @@ def entrainer(sortie: Path, av) -> Path:
     preds.to_parquet(dossier / "predictions_test.parquet", index=False)
     meta = {
         "cible": "indice_tension (0 à 100) de chaque arrondissement de Dakar",
-        "horizons_h": list(HORIZONS), "entrees": ENTREES, "seuil_alerte": SEUIL_ALERTE,
+        "horizons_h": list(HORIZONS), "entrees": ENTREES, "seuil_alerte": SEUIL_ALERTE, "rappel_vise": RAPPEL_VISE,
+        "seuils_alerte_modele": {f"{h}h": resultats[f"{h}h"]["seuil_alerte_modele"] for h in HORIZONS},
         "apprentissage": f"2013-01-01 → {FIN_APPRENTISSAGE}", "validation": f"{FIN_APPRENTISSAGE} → {FIN_VALIDATION}",
         "test": f"{FIN_VALIDATION} → 2013-12-31", "zones": {int(k): v for k, v in zones.items()},
         "jours_particuliers": JOURS_PARTICULIERS, "resultats": resultats,
@@ -193,7 +216,10 @@ def rapport(meta: dict, imp: pd.DataFrame) -> str:
               f"- Apprentissage : {meta['apprentissage']} ; réglage : {meta['validation']} ; "
               f"**évaluation sur des semaines jamais vues** : {meta['test']}.",
               "- Références : « comme maintenant » (persistance) et « comme la semaine dernière à la même heure ».",
-              f"- Alerte : indice prévu ≥ {meta['seuil_alerte']}.", "",
+              f"- Saturation : indice observé ≥ {meta['seuil_alerte']}. Le modèle lissant les pics, son seuil d'alerte "
+              f"est réglé sur octobre pour annoncer au moins {pc(meta['rappel_vise'])} des saturations.",
+              "- Les repères de l'indice (niveau haut et niveau habituel de chaque zone) sont calculés sur la période "
+              "d'apprentissage seulement : rien ne fuit des mois d'évaluation.", "",
               "## Résultats sur la période de test", ""]
     for h, r in meta["resultats"].items():
         m, p, s = r["modele"], r["reference_persistance"], r["reference_semaine"]
@@ -202,7 +228,8 @@ def rapport(meta: dict, imp: pd.DataFrame) -> str:
         lignes += [f"### Prévision à {h.replace('h', ' h')}", "",
                    "| | Erreur moyenne (points) | RMSE | Alertes détectées | Alertes justes |",
                    "| --- | --- | --- | --- | --- |",
-                   f"| **Modèle** | **{fr(m['erreur_moyenne'])}** | {fr(m['rmse'])} | {pc(m['alertes_detectees'])} | {pc(m['alertes_justes'])} |",
+                   f"| **Modèle** (alerte dès {r['seuil_alerte_modele']:.0f} prévus) | **{fr(m['erreur_moyenne'])}** | {fr(m['rmse'])} | {pc(m['alertes_detectees'])} | {pc(m['alertes_justes'])} |",
+                   f"| Modèle, alerte dès {meta['seuil_alerte']} prévus | {fr(r['modele_seuil_brut']['erreur_moyenne'])} | {fr(r['modele_seuil_brut']['rmse'])} | {pc(r['modele_seuil_brut']['alertes_detectees'])} | {pc(r['modele_seuil_brut']['alertes_justes'])} |",
                    f"| Comme maintenant | {fr(p['erreur_moyenne'])} | {fr(p['rmse'])} | {pc(p['alertes_detectees'])} | {pc(p['alertes_justes'])} |",
                    f"| Comme la semaine dernière | {fr(s['erreur_moyenne'])} | {fr(s['rmse'])} | {pc(s['alertes_detectees'])} | {pc(s['alertes_justes'])} |",
                    "", (f"Le modèle réduit l'erreur de **{pc(gain)}** par rapport à la meilleure référence simple ({meilleure[1]})."

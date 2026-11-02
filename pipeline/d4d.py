@@ -24,6 +24,9 @@ from pathlib import Path
 
 import duckdb
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from periodes import FIN_APPRENTISSAGE  # noqa: E402
+
 SORTIE = Path(__file__).resolve().parent / "sortie"
 DAKAR = tuple(range(1, 11))  # ARR_ID des 10 arrondissements de la région de Dakar
 
@@ -327,11 +330,13 @@ def agreger(source: Path) -> None:
             LEFT JOIN (SELECT t, destination AS arr_id, sum(deplacements) AS n FROM flux GROUP BY 1, 2) arr USING (t, arr_id)
             LEFT JOIN (SELECT t, origine AS arr_id, sum(deplacements) AS n FROM flux GROUP BY 1, 2) dep USING (t, arr_id)),
         reperes AS (
-            SELECT arr_id, quantile_cont(appels, 0.99) AS p99 FROM base GROUP BY 1),
+            SELECT arr_id, quantile_cont(appels, 0.99) AS p99 FROM base WHERE t < TIMESTAMP '{FIN_APPRENTISSAGE}' GROUP BY 1),
         habituel AS (
-            SELECT arr_id, dayofweek(t) AS jour, hour(t) AS heure, median(appels) AS mediane FROM base GROUP BY 1, 2, 3)
+            SELECT arr_id, dayofweek(t) AS jour, hour(t) AS heure, median(appels) AS mediane FROM base
+            WHERE t < TIMESTAMP '{FIN_APPRENTISSAGE}' GROUP BY 1, 2, 3)
         SELECT b.t, b.arr_id, z.zone, b.appels, b.antennes_actives, b.presents_echantillon, b.arrivees, b.departs,
-               -- 0 à 100 : activité de l'heure rapportée au haut niveau habituel de la zone (99e centile de l'année)
+               -- 0 à 100 : activité de l'heure rapportée au haut niveau habituel de la zone
+               -- (99e centile de la période d'apprentissage, pour ne rien révéler des mois d'évaluation)
                least(100, round(100 * b.appels / r.p99))::INTEGER AS indice_tension,
                -- 1 = niveau habituel de la zone pour ce jour de la semaine et cette heure
                round(b.appels / nullif(h.mediane, 0), 3) AS ecart_habituel
@@ -388,9 +393,10 @@ def agreger(source: Path) -> None:
         "- `presents_echantillon` : usagers de l'échantillon SET2 vus dans la zone pendant l'heure.",
         "- `arrivees`, `departs` : déplacements de l'échantillon SET2 qui entrent dans la zone ou en sortent pendant l'heure.",
         "- `indice_tension` (0 à 100) : activité de l'heure rapportée au haut niveau habituel de la zone "
-        "(99e centile de l'année). C'est un indicateur de tension de mobilité, pas une mesure du trafic routier.",
+        f"(99e centile de janvier au {FIN_APPRENTISSAGE}, période d'apprentissage du modèle). "
+        "C'est un indicateur de tension de mobilité, pas une mesure du trafic routier.",
         "- `ecart_habituel` : activité rapportée à la médiane de la zone pour le même jour de la semaine et la même heure "
-        "(1 = habituel, 1,5 = 50 % au-dessus) ; sert à repérer les événements.", "",
+        "(1 = habituel, 1,5 = 50 % au-dessus), calculée sur la même période ; sert à repérer les événements.", "",
         f"_Durée de l'agrégation : {av.total_ecoule()}._", ""]
     (SORTIE / "agregation_d4d.md").write_text("\n".join(rapport), encoding="utf-8")
     av.fin()
