@@ -107,7 +107,7 @@ def entrainer(sortie: Path, av) -> Path:
     serie = pd.read_parquet(fichier)
     zones = serie.drop_duplicates("arr_id").set_index("arr_id")["zone"].to_dict()
     df = caracteristiques(serie)
-    av.fin(f"{len(df):,} lignes, {len(ENTREES)} caractéristiques".replace(",", " "))
+    av.fin(f"{len(df):,} lignes".replace(",", " ") + f", {len(ENTREES)} caractéristiques")
 
     resultats, importances, predictions = {}, [], []
     av.etape(f"Apprentissage : {len(HORIZONS)} modèles (prévision à {', '.join(f'{h} h' for h in HORIZONS)})")
@@ -123,11 +123,15 @@ def entrainer(sortie: Path, av) -> Path:
         val = connu[(connu["t"] >= FIN_APPRENTISSAGE) & (connu["t"] < FIN_VALIDATION)]
         test = connu[connu["t"] >= FIN_VALIDATION]
 
-        modele = lgb.LGBMRegressor(n_estimators=2000, learning_rate=0.03, num_leaves=63, min_child_samples=40,
-                                   subsample=0.8, subsample_freq=1, colsample_bytree=0.8, verbose=-1)
-        modele.fit(app[ENTREES], app["cible"], eval_set=[(val[ENTREES], val["cible"])], eval_metric="l1",
-                   callbacks=[lgb.early_stopping(100, verbose=False)])
-        prevu = np.clip(modele.predict(test[ENTREES], num_iteration=modele.best_iteration_), 0, 100)
+        # API native de LightGBM : pas besoin de scikit-learn
+        parametres = {"objective": "regression", "metric": "l1", "learning_rate": 0.03, "num_leaves": 63,
+                      "min_data_in_leaf": 40, "bagging_fraction": 0.8, "bagging_freq": 1,
+                      "feature_fraction": 0.8, "verbose": -1, "seed": 42}
+        jeu_app = lgb.Dataset(app[ENTREES], app["cible"])
+        jeu_val = lgb.Dataset(val[ENTREES], val["cible"], reference=jeu_app)
+        modele = lgb.train(parametres, jeu_app, num_boost_round=2000, valid_sets=[jeu_val],
+                           callbacks=[lgb.early_stopping(100, verbose=False)])
+        prevu = np.clip(modele.predict(test[ENTREES], num_iteration=modele.best_iteration), 0, 100)
 
         resultats[f"{h}h"] = {
             "modele": mesures(test["cible"].to_numpy(), prevu),
@@ -135,16 +139,17 @@ def entrainer(sortie: Path, av) -> Path:
             "reference_semaine": mesures(test["cible"].to_numpy(), test["ref_semaine"].to_numpy(dtype=float)),
             "par_zone": {zones[z]: mesures(t["cible"].to_numpy(), prevu[(test["arr_id"] == z).to_numpy()])
                          for z, t in test.groupby("arr_id")},
-            "arbres": int(modele.best_iteration_),
+            "arbres": int(modele.best_iteration),
         }
-        modele.booster_.save_model(str(dossier / f"tension_{h}h.txt"), num_iteration=modele.best_iteration_)
+        modele.save_model(str(dossier / f"tension_{h}h.txt"), num_iteration=modele.best_iteration)
         importances.append(pd.DataFrame({"horizon": f"{h}h", "caracteristique": ENTREES,
-                                         "importance": modele.booster_.feature_importance("gain")}))
+                                         "importance": modele.feature_importance("gain")}))
         predictions.append(pd.DataFrame({"t": test["t"], "arr_id": test["arr_id"], "horizon_h": h,
                                          "observe": test["cible"], "prevu": prevu.round(1)}))
         r = resultats[f"{h}h"]
-        av.barre(i, len(HORIZONS), f"à {h} h : erreur moyenne {r['modele']['erreur_moyenne']} points "
-                                   f"(référence {r['reference_persistance']['erreur_moyenne']})")
+        ref = min(r["reference_persistance"]["erreur_moyenne"], r["reference_semaine"]["erreur_moyenne"])
+        av.barre(i, len(HORIZONS), f"à {h} h : erreur moyenne {fr(r['modele']['erreur_moyenne'])} points "
+                                   f"(meilleure référence simple : {fr(ref)})")
     av.fin()
 
     av.etape("Fichiers et rapport")
@@ -169,6 +174,14 @@ def entrainer(sortie: Path, av) -> Path:
     return dossier
 
 
+def fr(x: float) -> str:
+    return f"{x:g}".replace(".", ",")
+
+
+def pc(x: float) -> str:
+    return f"{x * 100:.0f} %"
+
+
 def rapport(meta: dict, imp: pd.DataFrame) -> str:
     lignes = ["# Modèle de prévision de la tension par zone", "",
               "Généré par `pipeline/d4d.py entrainer` à partir de `serie_zone_heure.parquet`.", "",
@@ -184,20 +197,22 @@ def rapport(meta: dict, imp: pd.DataFrame) -> str:
               "## Résultats sur la période de test", ""]
     for h, r in meta["resultats"].items():
         m, p, s = r["modele"], r["reference_persistance"], r["reference_semaine"]
-        gain = 1 - m["erreur_moyenne"] / p["erreur_moyenne"] if p["erreur_moyenne"] else 0
+        meilleure = min((p, "« comme maintenant »"), (s, "« comme la semaine dernière »"), key=lambda x: x[0]["erreur_moyenne"])
+        gain = 1 - m["erreur_moyenne"] / meilleure[0]["erreur_moyenne"] if meilleure[0]["erreur_moyenne"] else 0
         lignes += [f"### Prévision à {h.replace('h', ' h')}", "",
                    "| | Erreur moyenne (points) | RMSE | Alertes détectées | Alertes justes |",
                    "| --- | --- | --- | --- | --- |",
-                   f"| **Modèle** | **{m['erreur_moyenne']}** | {m['rmse']} | {m['alertes_detectees']:.0%} | {m['alertes_justes']:.0%} |",
-                   f"| Comme maintenant | {p['erreur_moyenne']} | {p['rmse']} | {p['alertes_detectees']:.0%} | {p['alertes_justes']:.0%} |",
-                   f"| Comme la semaine dernière | {s['erreur_moyenne']} | {s['rmse']} | {s['alertes_detectees']:.0%} | {s['alertes_justes']:.0%} |",
-                   "", f"Le modèle réduit l'erreur de **{gain:.0%}** par rapport à la meilleure intuition simple "
-                   f"(« comme maintenant »). {m['alertes_reelles']} heures-zones ont réellement dépassé {meta['seuil_alerte']}.", "",
+                   f"| **Modèle** | **{fr(m['erreur_moyenne'])}** | {fr(m['rmse'])} | {pc(m['alertes_detectees'])} | {pc(m['alertes_justes'])} |",
+                   f"| Comme maintenant | {fr(p['erreur_moyenne'])} | {fr(p['rmse'])} | {pc(p['alertes_detectees'])} | {pc(p['alertes_justes'])} |",
+                   f"| Comme la semaine dernière | {fr(s['erreur_moyenne'])} | {fr(s['rmse'])} | {pc(s['alertes_detectees'])} | {pc(s['alertes_justes'])} |",
+                   "", (f"Le modèle réduit l'erreur de **{pc(gain)}** par rapport à la meilleure référence simple ({meilleure[1]})."
+                        if gain > 0 else f"Le modèle ne fait **pas mieux** que la meilleure référence simple ({meilleure[1]}) : ne pas l'utiliser en l'état.")
+                   + f" {m['alertes_reelles']} heures-zones ont réellement dépassé {meta['seuil_alerte']}.", "",
                    "| Zone | Erreur moyenne | Alertes détectées | Alertes justes |", "| --- | --- | --- | --- |"]
-        lignes += [f"| {z} | {v['erreur_moyenne']} | {v['alertes_detectees']:.0%} | {v['alertes_justes']:.0%} |"
+        lignes += [f"| {z} | {fr(v['erreur_moyenne'])} | {pc(v['alertes_detectees'])} | {pc(v['alertes_justes'])} |"
                    for z, v in r["par_zone"].items()]
         top = imp[imp["horizon"] == h].sort_values("importance", ascending=False).head(6)
-        lignes += ["", "Facteurs les plus utilisés : " + ", ".join(f"`{c}` ({v} %)" for c, v in
+        lignes += ["", "Facteurs les plus utilisés : " + ", ".join(f"`{c}` ({fr(v)} %)" for c, v in
                                                                  zip(top["caracteristique"], top["importance"])), ""]
     lignes += ["## Lecture", "",
                "- *Erreur moyenne* : écart moyen entre l'indice prévu et l'indice observé, en points (sur 100).",
