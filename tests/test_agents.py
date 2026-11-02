@@ -211,10 +211,8 @@ def test_inventaire_de_la_base_de_connaissances(tmp_path, monkeypatch):
     # Inventaire fictif : le test ne dépend pas du dépôt de la base de connaissances
     entetes = "id,dossier,fichier,titre,reference,type,autorite,date_adoption,domaine,pays,url_source,statut,responsable,notes"
     (tmp_path / "sources.csv").write_text(
-        entetes + "
-SEN-DP-001,Senegal,loi.pdf,Loi sur les données personnelles,Loi 2008-12,LOI,État,2008-01-25,"
-        "donnees_personnelles,Sénégal,https://exemple.sn,collecte,,
-", encoding="utf-8")
+        entetes + "\nSEN-DP-001,Senegal,loi.pdf,Loi sur les données personnelles,Loi 2008-12,LOI,État,2008-01-25,"
+        "donnees_personnelles,Sénégal,https://exemple.sn,collecte,,\n", encoding="utf-8")
     monkeypatch.setattr(kb.settings, "chroma_dir", tmp_path / "chroma")
     kb._client.cache_clear()
     try:
