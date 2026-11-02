@@ -120,7 +120,55 @@ Dans le dossier `pipeline\sortie\` du dépôt. La liste des fichiers s'affiche a
 
 ## Étape 4 : nettoyage et agrégation
 
-À venir : `pipeline\d4d.py agreger`, qui produira les séries par arrondissement de Dakar et par heure (activité, arrivées, départs, flux entre zones) utilisées par le modèle de prévision.
+Nécessite l'étape 3 (elle réutilise `set1v_heure_antenne.parquet`).
+
+Ce que fait l'étape :
+- **Nettoyage :** suppression des doublons exacts de SET2, exclusion de la journée de panne du 29 mars 2013.
+- **Sélection :** région de Dakar (10 arrondissements). Les autres antennes forment une zone « hors Dakar », utilisée seulement pour les déplacements qui entrent dans la région ou en sortent.
+- **Agrégation :** pour chaque arrondissement et chaque heure de 2013, les appels (SET1), les usagers présents, les arrivées et les départs (SET2), et l'indice de tension.
+
+1. Se placer dans le dossier du dépôt (inutile si vous y êtes déjà) :
+
+   ```powershell
+   cd "<chemin vers>\flowpulse-ai-service"
+   ```
+
+2. Activer l'environnement (inutile si `(.venv)` est déjà affiché au début de la ligne) :
+
+   ```powershell
+   .venv\Scripts\Activate.ps1
+   ```
+
+3. Régler l'encodage du terminal :
+
+   ```powershell
+   $env:PYTHONIOENCODING = "utf-8"
+   ```
+
+4. Lancer l'agrégation, en remplaçant `E:\data` par l'emplacement du dossier `data` :
+
+   ```powershell
+   python -I pipeline\d4d.py agreger --source E:\data
+   ```
+
+- **Durée :** environ 15 à 30 minutes. La partie longue est la lecture des 25 périodes de trajets (SET2), affichée avec une barre de progression.
+- **Ne pas fermer le terminal** pendant le traitement. Pour l'interrompre : `Ctrl + C`, puis relancer la même commande (l'étape repart de zéro).
+
+### Où sont les résultats
+
+Dans le même dossier `pipeline\sortie\` :
+
+| Fichier | Format | Contenu | S'ouvre avec |
+| --- | --- | --- | --- |
+| `agregation_d4d.md` | Markdown | Le rapport : nettoyage appliqué, chiffres par zone, indice moyen par heure, principaux déplacements entre zones, définitions des colonnes | VS Code, GitHub |
+| `zones_dakar.csv` | CSV (`;`) | Les 10 arrondissements : identifiant, nom, nombre d'antennes, position moyenne (longitude, latitude) | Excel |
+| `serie_zone_heure.csv` | CSV (`;`) | Environ 87 000 lignes (10 zones × 8 760 heures) : `appels`, `antennes_actives`, `presents_echantillon`, `arrivees`, `departs`, `indice_tension`, `ecart_habituel` | Excel |
+| `serie_zone_heure.parquet` | Parquet | La même série, pour le modèle de prévision et le service IA | Python |
+| `flux_zone_heure.parquet` | Parquet | Déplacements par heure entre zones (origine → destination, zone 0 = hors Dakar) | Python |
+
+L'**indice de tension** (0 à 100) rapporte l'activité de l'heure au haut niveau habituel de la zone (99e centile de l'année). C'est un **indicateur de tension de mobilité** tiré de l'activité téléphonique, pas une mesure directe du trafic routier. L'**écart habituel** compare l'heure à la médiane de la zone pour le même jour et la même heure (1 = habituel) : il fait ressortir les événements.
+
+Aucun de ces fichiers ne contient de donnée individuelle : uniquement des totaux par zone et par heure.
 
 ## En cas de problème
 
@@ -129,4 +177,6 @@ Dans le dossier `pipeline\sortie\` du dépôt. La liste des fichiers s'affiche a
 | `No module named 'duckdb'` | Environnement non activé, ou étape 1 non faite | Vérifier que `(.venv)` est affiché, sinon refaire l'étape 1 |
 | `No files found that match the pattern` | Mauvais chemin du disque | Vérifier la lettre du lecteur et le dossier `data` |
 | `Out of Memory` | Mémoire de l'ordinateur insuffisante | Fermer les autres applications et relancer |
+| `Résumé SET1 introuvable` | L'étape 3 n'a pas été lancée | Lancer d'abord `explorer` |
+| Les résultats doivent aller ailleurs | Autre dossier souhaité | Ajouter `--sortie <dossier>` à la commande |
 | Caractères bizarres dans le terminal | Encodage de la console | Relancer la commande `$env:PYTHONIOENCODING = "utf-8"` |

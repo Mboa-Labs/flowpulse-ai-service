@@ -52,6 +52,21 @@ def md_table(rows: list[tuple], headers: list[str]) -> str:
     return "\n".join(out)
 
 
+JOURS = ["dimanche", "lundi", "mardi", "mercredi", "jeudi", "vendredi", "samedi"]
+
+
+def nombre(n: int) -> str:
+    return f"{n or 0:,}".replace(",", " ")
+
+
+def pourcent(x: float, decimales: int = 1) -> str:
+    return f"{x * 100:.{decimales}f} %".replace(".", ",")
+
+
+def taille(octets: int) -> str:
+    return f"{octets / 1e6:.1f} Mo".replace(".", ",") if octets >= 1e5 else f"{max(1, round(octets / 1e3))} Ko"
+
+
 def duree(secondes: float) -> str:
     secondes = int(secondes)
     return f"{secondes // 60} min {secondes % 60:02d} s" if secondes >= 60 else f"{secondes} s"
@@ -150,7 +165,7 @@ def explorer(source: Path) -> None:
                 md_table(mois, ["Mois", "Lignes", "Heures présentes", "Heures attendues", "Appels",
                                 "Durée ≥ 3600 s", "Durée nulle", "Appels sur la même antenne"]), "",
                 f"- Lignes dont une antenne est absente de la table des sites : {inconnus:,}".replace(",", " "),
-                f"- Part des appels émis depuis la région de Dakar : {part_dakar:.1%}",
+                f"- Part des appels émis depuis la région de Dakar : {pourcent(part_dakar)}",
                 f"- Heures totalement absentes de l'année : {len(manquantes)}"
                 + (f" (exemples : {', '.join(m[0] for m in manquantes[:10])})" if manquantes else ""), ""]
 
@@ -162,9 +177,10 @@ def explorer(source: Path) -> None:
     semaine = con.execute("""
         SELECT dayofweek(d), round(avg(n))::BIGINT FROM (SELECT date_trunc('day', t) AS d, sum(appels) AS n FROM vd GROUP BY 1)
         GROUP BY 1 ORDER BY 1""").fetchall()
-    jours = ["dimanche", "lundi", "mardi", "mercredi", "jeudi", "vendredi", "samedi"]
+    jours = JOURS
+    extremes_txt = lambda rows: ", ".join(f"{d:%Y-%m-%d} ({JOURS[int(d.strftime('%w'))]}, {nombre(n)})" for d, n in rows)
     extremes = con.execute("""
-        SELECT strftime(d, '%Y-%m-%d (%a)'), n FROM (SELECT date_trunc('day', t) AS d, sum(appels)::BIGINT AS n FROM vd GROUP BY 1)
+        SELECT d, n FROM (SELECT date_trunc('day', t) AS d, sum(appels)::BIGINT AS n FROM vd GROUP BY 1)
         ORDER BY n""").fetchall()
     silences = con.execute(f"""
         SELECT count(*) FROM (SELECT s.site_id FROM sites s LEFT JOIN vd ON vd.site_out = s.site_id
@@ -172,8 +188,8 @@ def explorer(source: Path) -> None:
     rapport += ["### Rythme de l'activité à Dakar", "",
                 md_table(profil, ["Heure", "Appels moyens émis depuis Dakar"]), "",
                 md_table([(jours[j], n) for j, n in semaine], ["Jour", "Appels moyens par jour"]), "",
-                "Jours les plus calmes : " + ", ".join(f"{d} ({n:,})".replace(",", " ") for d, n in extremes[:5]), "",
-                "Jours les plus chargés : " + ", ".join(f"{d} ({n:,})".replace(",", " ") for d, n in extremes[-5:]), "",
+                "Jours les plus calmes : " + extremes_txt(extremes[:5]), "",
+                "Jours les plus chargés : " + extremes_txt(extremes[-5:]), "",
                 f"- Antennes de Dakar actives moins de 300 jours sur 365 : {silences}", ""]
     av.fin()
 
@@ -192,12 +208,11 @@ def explorer(source: Path) -> None:
         SELECT count(DISTINCT user_id)::BIGINT, count(*)::BIGINT FROM {p01} p JOIN sites s ON s.site_id = p.site_id
         WHERE s.arr_id IN {DAKAR}""").fetchone()
     rapport += ["## SET2 : positions des usagers échantillonnés (période 1)", "",
-                f"- {s2[0]:,} positions, {s2[1]:,} usagers, du {s2[2]} au {s2[3]}.".replace(",", " "),
-                f"- Doublons exacts (même usager, même minute, même antenne) : {s2[4]:,} ({s2[4] / s2[0]:.1%}).".replace(",", " "),
-                f"- Positions sur une antenne inconnue : {s2[5]:,}.".replace(",", " "),
-                f"- Usagers vus au moins une fois dans la région de Dakar : {s2_dakar[0]:,} ({s2_dakar[0] / s2[1]:.0%}), "
-                f"{s2_dakar[1]:,} positions.".replace(",", " "), ""]
-    nombre = lambda n: f"{n:,}".replace(",", " ")
+                f"- {nombre(s2[0])} positions, {nombre(s2[1])} usagers, du {s2[2]} au {s2[3]}.",
+                f"- Doublons exacts (même usager, même minute, même antenne) : {nombre(s2[4])} ({pourcent(s2[4] / s2[0])}).",
+                f"- Positions sur une antenne inconnue : {nombre(s2[5])}.",
+                f"- Usagers vus au moins une fois dans la région de Dakar : {nombre(s2_dakar[0])} "
+                f"({pourcent(s2_dakar[0] / s2[1], 0)}), {nombre(s2_dakar[1])} positions.", ""]
     av.fin(f"{nombre(s2[1])} usagers, dont {nombre(s2_dakar[0])} vus à Dakar")
 
     av.etape("Rapport et tableaux")
@@ -207,7 +222,7 @@ def explorer(source: Path) -> None:
                                   "duree_plafonnee", "duree_nulle", "appels_meme_site"], mois),
         "exploration_dakar_par_heure.csv": (["heure", "appels_moyens"], profil),
         "exploration_dakar_par_jour.csv": (["jour", "appels_moyens"], [(jours[j], n) for j, n in semaine]),
-        "exploration_dakar_jours.csv": (["date", "appels"], extremes),
+        "exploration_dakar_jours.csv": (["date", "appels"], [(f"{d:%Y-%m-%d}", n) for d, n in extremes]),
     }
     for nom, (entetes, lignes) in tableaux.items():
         with (SORTIE / nom).open("w", encoding="utf-8-sig", newline="") as fh:
@@ -227,16 +242,170 @@ def explorer(source: Path) -> None:
     av.fin()
     print(f"\nExploration terminée en {av.total_ecoule()}. Résultats dans {SORTIE} :")
     for f in sorted(SORTIE.glob("*")):
-        print(f"  - {f.name} ({f.stat().st_size / 1e6:.1f} Mo)")
+        print(f"  - {f.name} ({taille(f.stat().st_size)})")
+
+
+# ---------------------------------------------------------------------------------------- Agrégation
+
+JOURS_EXCLUS = ("2013-03-29",)  # panne de collecte constatée à l'exploration (journée presque vide)
+ECART_MAX_DEPLACEMENT = "2 hours"  # au-delà, deux positions successives ne forment pas un déplacement
+
+
+def agreger(source: Path) -> None:
+    """Nettoie, garde la région de Dakar et produit des séries par arrondissement et par heure."""
+    av = Avancement(5)
+    resume_set1 = SORTIE / "set1v_heure_antenne.parquet"
+    if not resume_set1.exists():
+        sys.exit("Résumé SET1 introuvable : lancer d'abord l'étape « explorer ».")
+    periodes = sorted((source / "SET2").glob("SET2_P*.CSV.gz"))
+    if not periodes:
+        sys.exit(f"Aucun fichier SET2_P*.CSV.gz dans {source / 'SET2'} : vérifier le chemin --source.")
+
+    av.etape("Zones : arrondissements de Dakar et position de leurs antennes")
+    con = connect(source)
+    con.create_function("titre", lambda t: t.title(), ["VARCHAR"], "VARCHAR")  # « GRAND DAKAR » → « Grand Dakar »
+    con.execute(f"""
+        CREATE TABLE zones AS
+        SELECT a.ARR_ID AS arr_id, titre(a.ARR) AS zone, a.DEPT AS departement, count(s.site_id)::INTEGER AS antennes,
+               round(avg(s.lon), 5) AS lon, round(avg(s.lat), 5) AS lat
+        FROM arr a JOIN sites s ON s.arr_id = a.ARR_ID WHERE a.ARR_ID IN {DAKAR} GROUP BY ALL ORDER BY 1""")
+    # Toute antenne hors de la région de Dakar est rangée dans une zone 0 « hors Dakar »
+    con.execute(f"CREATE TABLE site_zone AS SELECT site_id, CASE WHEN arr_id IN {DAKAR} THEN arr_id ELSE 0 END AS arr_id FROM sites")
+    av.fin(f"{con.execute('SELECT count(*) FROM zones').fetchone()[0]} arrondissements")
+
+    av.etape("SET1 voix : appels par arrondissement et par heure")
+    con.execute(f"""
+        CREATE TABLE activite AS
+        SELECT v.t, z.arr_id, sum(v.appels)::BIGINT AS appels, count(DISTINCT v.site_out)::INTEGER AS antennes_actives
+        FROM read_parquet('{resume_set1.as_posix()}') v JOIN site_zone z ON z.site_id = v.site_out
+        WHERE z.arr_id > 0 AND strftime(v.t, '%Y-%m-%d') NOT IN {JOURS_EXCLUS + ('',)}
+        GROUP BY 1, 2""")
+    av.fin(f"{nombre(con.execute('SELECT count(*) FROM activite').fetchone()[0])} heures-zones")
+
+    av.etape(f"SET2 : présences et déplacements, {len(periodes)} périodes de 2 semaines (environ 30 s par période)")
+    con.execute("CREATE TABLE presence (t TIMESTAMP, arr_id INTEGER, presents BIGINT)")
+    con.execute("CREATE TABLE flux (t TIMESTAMP, origine INTEGER, destination INTEGER, deplacements BIGINT)")
+    doublons = positions = 0
+    for i, f in enumerate(periodes, 1):
+        # Nettoyage : antenne → arrondissement, doublons exacts supprimés
+        con.execute(f"""
+            CREATE OR REPLACE TABLE pos AS
+            SELECT DISTINCT p.user_id, p.ts, z.arr_id
+            FROM {lire(source, 'SET2/' + f.name, SET2)} p JOIN site_zone z ON z.site_id = p.site_id""")
+        lus = con.execute(f"SELECT count(*) FROM {lire(source, 'SET2/' + f.name, SET2)}").fetchone()[0] if i == 1 else None
+        n = con.execute("SELECT count(*) FROM pos").fetchone()[0]
+        if lus is not None:
+            doublons, positions = lus - n, lus
+        con.execute("""
+            INSERT INTO presence
+            SELECT date_trunc('hour', ts), arr_id, count(DISTINCT user_id) FROM pos WHERE arr_id > 0 GROUP BY 1, 2""")
+        # Déplacement : deux positions successives du même usager, dans deux zones différentes, à moins de 2 h
+        con.execute(f"""
+            INSERT INTO flux
+            SELECT date_trunc('hour', ts), origine, arr_id, count(*) FROM (
+                SELECT ts, arr_id,
+                       lag(arr_id) OVER w AS origine, lag(ts) OVER w AS ts_prec
+                FROM pos WINDOW w AS (PARTITION BY user_id ORDER BY ts))
+            WHERE origine IS NOT NULL AND origine <> arr_id AND ts - ts_prec <= INTERVAL '{ECART_MAX_DEPLACEMENT}'
+              AND (origine > 0 OR arr_id > 0)
+            GROUP BY 1, 2, 3""")
+        av.barre(i, len(periodes), f"{f.name.split('.')[0]} : {millions(n)} positions après nettoyage")
+    con.execute("DROP TABLE pos")
+    av.fin(f"{nombre(con.execute('SELECT sum(deplacements) FROM flux').fetchone()[0])} déplacements entre zones")
+
+    av.etape("Séries par zone et indice de tension")
+    con.execute(f"""
+        CREATE TABLE serie AS
+        WITH base AS (
+            SELECT a.t, a.arr_id, a.appels, a.antennes_actives,
+                   coalesce(p.presents, 0) AS presents_echantillon,
+                   coalesce(arr.n, 0) AS arrivees, coalesce(dep.n, 0) AS departs
+            FROM activite a
+            LEFT JOIN presence p USING (t, arr_id)
+            LEFT JOIN (SELECT t, destination AS arr_id, sum(deplacements) AS n FROM flux GROUP BY 1, 2) arr USING (t, arr_id)
+            LEFT JOIN (SELECT t, origine AS arr_id, sum(deplacements) AS n FROM flux GROUP BY 1, 2) dep USING (t, arr_id)),
+        reperes AS (
+            SELECT arr_id, quantile_cont(appels, 0.99) AS p99 FROM base GROUP BY 1),
+        habituel AS (
+            SELECT arr_id, dayofweek(t) AS jour, hour(t) AS heure, median(appels) AS mediane FROM base GROUP BY 1, 2, 3)
+        SELECT b.t, b.arr_id, z.zone, b.appels, b.antennes_actives, b.presents_echantillon, b.arrivees, b.departs,
+               -- 0 à 100 : activité de l'heure rapportée au haut niveau habituel de la zone (99e centile de l'année)
+               least(100, round(100 * b.appels / r.p99))::INTEGER AS indice_tension,
+               -- 1 = niveau habituel de la zone pour ce jour de la semaine et cette heure
+               round(b.appels / nullif(h.mediane, 0), 3) AS ecart_habituel
+        FROM base b JOIN zones z USING (arr_id) JOIN reperes r USING (arr_id)
+        JOIN habituel h ON h.arr_id = b.arr_id AND h.jour = dayofweek(b.t) AND h.heure = hour(b.t)
+        ORDER BY b.t, b.arr_id""")
+    qualite = con.execute(f"""
+        SELECT count(*), count(DISTINCT t), min(t), max(t),
+               sum(CASE WHEN indice_tension >= 85 THEN 1 ELSE 0 END), sum(CASE WHEN indice_tension >= 75 THEN 1 ELSE 0 END)
+        FROM serie""").fetchone()
+    av.fin(f"{nombre(qualite[0])} lignes, {nombre(qualite[1])} heures")
+
+    av.etape("Fichiers et rapport")
+    con.execute(f"COPY zones TO '{(SORTIE / 'zones_dakar.csv').as_posix()}' (HEADER, DELIMITER ';')")
+    con.execute(f"COPY serie TO '{(SORTIE / 'serie_zone_heure.parquet').as_posix()}' (FORMAT parquet)")
+    con.execute(f"COPY serie TO '{(SORTIE / 'serie_zone_heure.csv').as_posix()}' (HEADER, DELIMITER ';')")
+    con.execute(f"""COPY (SELECT f.* FROM flux f WHERE strftime(t, '%Y-%m-%d') NOT IN {JOURS_EXCLUS + ('',)} ORDER BY 1, 2, 3)
+                    TO '{(SORTIE / 'flux_zone_heure.parquet').as_posix()}' (FORMAT parquet)""")
+
+    par_zone = con.execute("""
+        SELECT zone, round(avg(appels))::BIGINT, round(avg(presents_echantillon))::BIGINT,
+               sum(arrivees)::BIGINT, sum(departs)::BIGINT,
+               round(avg(indice_tension))::INTEGER, sum(CASE WHEN indice_tension >= 85 THEN 1 ELSE 0 END)::BIGINT
+        FROM serie GROUP BY zone, arr_id ORDER BY arr_id""").fetchall()
+    profil = con.execute("""
+        SELECT hour(t), round(avg(indice_tension))::INTEGER FROM serie WHERE dayofweek(t) BETWEEN 1 AND 5
+        GROUP BY 1 ORDER BY 1""").fetchall()
+    od = con.execute("""
+        SELECT coalesce(o.zone, 'Hors Dakar'), coalesce(d.zone, 'Hors Dakar'), sum(f.deplacements)::BIGINT AS n
+        FROM flux f LEFT JOIN zones o ON o.arr_id = f.origine LEFT JOIN zones d ON d.arr_id = f.destination
+        GROUP BY 1, 2 ORDER BY n DESC LIMIT 10""").fetchall()
+    rapport = [
+        "# Agrégation du dataset D4D-Sénégal : région de Dakar", "",
+        f"Source : `{source}` (lecture seule). Généré par `pipeline/d4d.py agreger`.", "",
+        "## Nettoyage et sélection appliqués", "",
+        "- Région de Dakar seulement : 10 arrondissements ; les autres antennes forment une zone « hors Dakar » "
+        "utilisée uniquement pour les déplacements qui entrent dans la région ou en sortent.",
+        f"- Journées exclues (panne de collecte) : {', '.join(JOURS_EXCLUS)}.",
+        f"- SET2, période 1 : {nombre(doublons)} doublons supprimés sur {nombre(positions)} positions "
+        f"({pourcent(doublons / positions if positions else 0)}) ; même règle sur les 25 périodes.",
+        f"- Déplacement : deux positions successives du même usager, dans deux zones différentes, à moins de {ECART_MAX_DEPLACEMENT.replace('hours', 'heures')}.",
+        "- Aucune donnée individuelle dans les fichiers produits : uniquement des totaux par zone et par heure.", "",
+        "## Séries produites", "",
+        f"- {nombre(qualite[0])} lignes (zone × heure), {nombre(qualite[1])} heures, du {qualite[2]} au {qualite[3]}.",
+        f"- Heures-zones en tension forte (indice ≥ 85) : {nombre(qualite[4])} ; en tension (≥ 75) : {nombre(qualite[5])}.", "",
+        md_table(par_zone, ["Zone", "Appels moyens par heure", "Présents moyens (échantillon)", "Arrivées (année)",
+                            "Départs (année)", "Indice moyen", "Heures ≥ 85"]), "",
+        "### Indice de tension moyen par heure (jours ouvrés)", "",
+        md_table(profil, ["Heure", "Indice moyen"]), "",
+        "### Principaux déplacements entre zones (échantillon SET2, toute l'année)", "",
+        md_table(od, ["Origine", "Destination", "Déplacements"]), "",
+        "## Définitions", "",
+        "- `appels` : appels émis depuis les antennes de la zone pendant l'heure (tous les abonnés Orange, SET1).",
+        "- `presents_echantillon` : usagers de l'échantillon SET2 vus dans la zone pendant l'heure.",
+        "- `arrivees`, `departs` : déplacements de l'échantillon SET2 qui entrent dans la zone ou en sortent pendant l'heure.",
+        "- `indice_tension` (0 à 100) : activité de l'heure rapportée au haut niveau habituel de la zone "
+        "(99e centile de l'année). C'est un indicateur de tension de mobilité, pas une mesure du trafic routier.",
+        "- `ecart_habituel` : activité rapportée à la médiane de la zone pour le même jour de la semaine et la même heure "
+        "(1 = habituel, 1,5 = 50 % au-dessus) ; sert à repérer les événements.", "",
+        f"_Durée de l'agrégation : {av.total_ecoule()}._", ""]
+    (SORTIE / "agregation_d4d.md").write_text("\n".join(rapport), encoding="utf-8")
+    av.fin()
+    print(f"\nAgrégation terminée en {av.total_ecoule()}. Résultats dans {SORTIE} :")
+    for nom in ("agregation_d4d.md", "zones_dakar.csv", "serie_zone_heure.csv", "serie_zone_heure.parquet", "flux_zone_heure.parquet"):
+        print(f"  - {nom} ({taille((SORTIE / nom).stat().st_size)})")
 
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("etape", choices=["explorer"])
+    parser.add_argument("etape", choices=["explorer", "agreger"])
     parser.add_argument("--source", type=Path, required=True, help="dossier data du disque (contient SET1, SET2, ContextData)")
+    parser.add_argument("--sortie", type=Path, default=SORTIE, help=f"dossier des résultats (défaut : {SORTIE})")
     args = parser.parse_args()
+    globals()["SORTIE"] = args.sortie
     sys.stdout.reconfigure(encoding="utf-8")  # barres et accents corrects dans la console Windows
-    {"explorer": explorer}[args.etape](args.source)
+    {"explorer": explorer, "agreger": agreger}[args.etape](args.source)
 
 
 if __name__ == "__main__":
