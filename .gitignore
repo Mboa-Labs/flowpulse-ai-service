@@ -3,5 +3,7 @@ __pycache__/
 *.pyc
 .pytest_cache/
 
-# Sorties du pipeline D4D (agrégats et rapports locaux, jamais les données brutes)
-pipeline/sortie/
+# Sorties du pipeline D4D : seuls les agrégats par zone, les rapports et les modèles sont versionnés
+# (le service IA en a besoin) ; le résumé par antenne et les doublons CSV restent locaux
+pipeline/sortie/set1v_heure_antenne.parquet
+pipeline/sortie/serie_zone_heure.csv

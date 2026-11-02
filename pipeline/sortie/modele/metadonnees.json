@@ -1,0 +1,306 @@
+{
+  "cible": "indice_tension (0 à 100) de chaque arrondissement de Dakar",
+  "horizons_h": [
+    1,
+    2
+  ],
+  "entrees": [
+    "zone_id",
+    "heure",
+    "jour_semaine",
+    "week_end",
+    "mois",
+    "jour_particulier",
+    "indice_tension",
+    "tension_moins_1h",
+    "tension_moins_2h",
+    "tension_moins_3h",
+    "tension_moins_24h",
+    "tension_moins_168h",
+    "tension_moy_3h",
+    "ecart_habituel",
+    "tension_region",
+    "arrivees",
+    "departs",
+    "mouvements_moins_1h",
+    "arrivees_moins_1h",
+    "mouvements_par_present",
+    "antennes_actives"
+  ],
+  "seuil_alerte": 85,
+  "rappel_vise": 0.75,
+  "seuils_alerte_modele": {
+    "1h": 85.0,
+    "2h": 84.0
+  },
+  "apprentissage": "2013-01-01 → 2013-10-01",
+  "validation": "2013-10-01 → 2013-11-01",
+  "test": "2013-11-01 → 2013-12-31",
+  "zones": {
+    "1": "Parcelles Assainies",
+    "2": "Almadies",
+    "3": "Grand Dakar",
+    "4": "Dakar Plateau",
+    "5": "Guediawaye",
+    "6": "Pikine Dagoudane",
+    "7": "Thiaroye",
+    "8": "Niayes",
+    "9": "Rufisque",
+    "10": "Bambilor"
+  },
+  "jours_particuliers": {
+    "2013-01-01": "Jour de l'an",
+    "2013-01-24": "Maouloud",
+    "2013-04-01": "Lundi de Pâques",
+    "2013-04-04": "Fête de l'indépendance",
+    "2013-05-01": "Fête du travail",
+    "2013-05-09": "Ascension",
+    "2013-05-20": "Lundi de Pentecôte",
+    "2013-08-08": "Korité",
+    "2013-08-15": "Assomption",
+    "2013-10-15": "Tabaski",
+    "2013-11-01": "Toussaint",
+    "2013-11-14": "Tamkharit",
+    "2013-12-22": "Grand Magal de Touba",
+    "2013-12-25": "Noël",
+    "2013-12-31": "Saint-Sylvestre"
+  },
+  "resultats": {
+    "1h": {
+      "seuil_alerte_modele": 85.0,
+      "modele": {
+        "erreur_moyenne": 3.11,
+        "rmse": 5.19,
+        "alertes_reelles": 1315,
+        "alertes_detectees": 0.69,
+        "alertes_justes": 0.661,
+        "points": 14630
+      },
+      "modele_seuil_brut": {
+        "erreur_moyenne": 3.11,
+        "rmse": 5.19,
+        "alertes_reelles": 1315,
+        "alertes_detectees": 0.69,
+        "alertes_justes": 0.661,
+        "points": 14630
+      },
+      "reference_persistance": {
+        "erreur_moyenne": 8.97,
+        "rmse": 11.89,
+        "alertes_reelles": 1315,
+        "alertes_detectees": 0.503,
+        "alertes_justes": 0.505,
+        "points": 14630
+      },
+      "reference_semaine": {
+        "erreur_moyenne": 6.11,
+        "rmse": 10.14,
+        "alertes_reelles": 1315,
+        "alertes_detectees": 0.522,
+        "alertes_justes": 0.565,
+        "points": 14630
+      },
+      "par_zone": {
+        "Parcelles Assainies": {
+          "erreur_moyenne": 2.97,
+          "rmse": 4.99,
+          "alertes_reelles": 110,
+          "alertes_detectees": 0.764,
+          "alertes_justes": 0.641,
+          "points": 1463
+        },
+        "Almadies": {
+          "erreur_moyenne": 2.82,
+          "rmse": 4.57,
+          "alertes_reelles": 228,
+          "alertes_detectees": 0.803,
+          "alertes_justes": 0.772,
+          "points": 1463
+        },
+        "Grand Dakar": {
+          "erreur_moyenne": 3.0,
+          "rmse": 4.93,
+          "alertes_reelles": 228,
+          "alertes_detectees": 0.785,
+          "alertes_justes": 0.814,
+          "points": 1463
+        },
+        "Dakar Plateau": {
+          "erreur_moyenne": 2.56,
+          "rmse": 4.04,
+          "alertes_reelles": 141,
+          "alertes_detectees": 0.858,
+          "alertes_justes": 0.89,
+          "points": 1463
+        },
+        "Guediawaye": {
+          "erreur_moyenne": 3.09,
+          "rmse": 5.31,
+          "alertes_reelles": 107,
+          "alertes_detectees": 0.598,
+          "alertes_justes": 0.604,
+          "points": 1463
+        },
+        "Pikine Dagoudane": {
+          "erreur_moyenne": 3.16,
+          "rmse": 5.34,
+          "alertes_reelles": 118,
+          "alertes_detectees": 0.602,
+          "alertes_justes": 0.559,
+          "points": 1463
+        },
+        "Thiaroye": {
+          "erreur_moyenne": 3.25,
+          "rmse": 5.41,
+          "alertes_reelles": 99,
+          "alertes_detectees": 0.586,
+          "alertes_justes": 0.542,
+          "points": 1463
+        },
+        "Niayes": {
+          "erreur_moyenne": 3.21,
+          "rmse": 5.58,
+          "alertes_reelles": 87,
+          "alertes_detectees": 0.506,
+          "alertes_justes": 0.463,
+          "points": 1463
+        },
+        "Rufisque": {
+          "erreur_moyenne": 3.44,
+          "rmse": 5.67,
+          "alertes_reelles": 102,
+          "alertes_detectees": 0.569,
+          "alertes_justes": 0.518,
+          "points": 1463
+        },
+        "Bambilor": {
+          "erreur_moyenne": 3.59,
+          "rmse": 5.84,
+          "alertes_reelles": 95,
+          "alertes_detectees": 0.484,
+          "alertes_justes": 0.447,
+          "points": 1463
+        }
+      },
+      "arbres": 1582
+    },
+    "2h": {
+      "seuil_alerte_modele": 84.0,
+      "modele": {
+        "erreur_moyenne": 4.58,
+        "rmse": 7.18,
+        "alertes_reelles": 1315,
+        "alertes_detectees": 0.722,
+        "alertes_justes": 0.585,
+        "points": 14620
+      },
+      "modele_seuil_brut": {
+        "erreur_moyenne": 4.58,
+        "rmse": 7.18,
+        "alertes_reelles": 1315,
+        "alertes_detectees": 0.663,
+        "alertes_justes": 0.598,
+        "points": 14620
+      },
+      "reference_persistance": {
+        "erreur_moyenne": 15.92,
+        "rmse": 21.12,
+        "alertes_reelles": 1315,
+        "alertes_detectees": 0.29,
+        "alertes_justes": 0.292,
+        "points": 14620
+      },
+      "reference_semaine": {
+        "erreur_moyenne": 6.11,
+        "rmse": 10.14,
+        "alertes_reelles": 1315,
+        "alertes_detectees": 0.522,
+        "alertes_justes": 0.565,
+        "points": 14620
+      },
+      "par_zone": {
+        "Parcelles Assainies": {
+          "erreur_moyenne": 4.56,
+          "rmse": 7.13,
+          "alertes_reelles": 110,
+          "alertes_detectees": 0.818,
+          "alertes_justes": 0.539,
+          "points": 1462
+        },
+        "Almadies": {
+          "erreur_moyenne": 4.44,
+          "rmse": 6.64,
+          "alertes_reelles": 228,
+          "alertes_detectees": 0.803,
+          "alertes_justes": 0.683,
+          "points": 1462
+        },
+        "Grand Dakar": {
+          "erreur_moyenne": 4.49,
+          "rmse": 6.83,
+          "alertes_reelles": 228,
+          "alertes_detectees": 0.75,
+          "alertes_justes": 0.731,
+          "points": 1462
+        },
+        "Dakar Plateau": {
+          "erreur_moyenne": 3.34,
+          "rmse": 4.98,
+          "alertes_reelles": 141,
+          "alertes_detectees": 0.738,
+          "alertes_justes": 0.897,
+          "points": 1462
+        },
+        "Guediawaye": {
+          "erreur_moyenne": 4.48,
+          "rmse": 7.3,
+          "alertes_reelles": 107,
+          "alertes_detectees": 0.738,
+          "alertes_justes": 0.534,
+          "points": 1462
+        },
+        "Pikine Dagoudane": {
+          "erreur_moyenne": 4.72,
+          "rmse": 7.48,
+          "alertes_reelles": 118,
+          "alertes_detectees": 0.703,
+          "alertes_justes": 0.509,
+          "points": 1462
+        },
+        "Thiaroye": {
+          "erreur_moyenne": 4.83,
+          "rmse": 7.56,
+          "alertes_reelles": 99,
+          "alertes_detectees": 0.768,
+          "alertes_justes": 0.478,
+          "points": 1462
+        },
+        "Niayes": {
+          "erreur_moyenne": 4.7,
+          "rmse": 7.51,
+          "alertes_reelles": 87,
+          "alertes_detectees": 0.517,
+          "alertes_justes": 0.413,
+          "points": 1462
+        },
+        "Rufisque": {
+          "erreur_moyenne": 5.0,
+          "rmse": 7.82,
+          "alertes_reelles": 102,
+          "alertes_detectees": 0.618,
+          "alertes_justes": 0.512,
+          "points": 1462
+        },
+        "Bambilor": {
+          "erreur_moyenne": 5.25,
+          "rmse": 8.11,
+          "alertes_reelles": 95,
+          "alertes_detectees": 0.589,
+          "alertes_justes": 0.412,
+          "points": 1462
+        }
+      },
+      "arbres": 1681
+    }
+  }
+}

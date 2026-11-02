@@ -1,0 +1,3 @@
+# Modèles LightGBM : texte à garder tel quel, sans conversion des fins de ligne
+pipeline/sortie/modele/*.txt -text
+*.parquet binary
