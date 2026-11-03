@@ -1,6 +1,7 @@
 """Configuration du service IA (variables d'environnement préfixées FLOWPULSE_)."""
 
 from pathlib import Path
+from typing import Optional
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -11,6 +12,9 @@ class Settings(BaseSettings):
     ollama_url: str = "http://localhost:11434"
     llm_model: str = "qwen2.5:7b"  # 14b sur un serveur avec carte graphique
     embed_model: str = "nomic-embed-text"
+    # Fils de calcul du modèle : à régler sur la limite de processeurs du conteneur Ollama. Par défaut, Ollama prend
+    # tous les cœurs de la machine ; bridé à 3 cœurs, il ralentit alors fortement (mesuré : 1 jeton/s au lieu de 7).
+    llm_threads: Optional[int] = None
     chroma_dir: Path = Path(__file__).resolve().parents[2] / "flowpulse-knowledge-base" / "chroma"
     backend_url: str = "http://localhost:8080"
     # PostgreSQL pour conserver traces, recommandations, manques et simulations ; vide = en mémoire

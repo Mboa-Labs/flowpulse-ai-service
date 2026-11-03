@@ -13,4 +13,5 @@ def get_llm(json_mode: bool = False):
         base_url=settings.ollama_url,
         temperature=0,
         format="json" if json_mode else None,
+        num_thread=settings.llm_threads,
     )

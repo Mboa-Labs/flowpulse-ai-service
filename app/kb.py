@@ -47,7 +47,8 @@ def _client():
 def embed(text: str) -> list[float]:
     import ollama
 
-    return ollama.Client(host=settings.ollama_url).embed(model=settings.embed_model, input=[text])["embeddings"][0]
+    options = {"num_thread": settings.llm_threads} if settings.llm_threads else None
+    return ollama.Client(host=settings.ollama_url).embed(model=settings.embed_model, input=[text], options=options)["embeddings"][0]
 
 
 def stats() -> dict[str, int]:
