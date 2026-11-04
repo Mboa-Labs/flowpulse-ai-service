@@ -49,6 +49,8 @@ class Reel:
     caracteristiques: object = None  # DataFrame indexé par l'heure « AAAA-MM-JJTHH »
     modeles: dict = field(default_factory=dict)  # horizon (h) -> Booster LightGBM
     entrees: list = field(default_factory=list)
+    # Territoire présenté (territoire.json des sorties) : nom, mention, flotte, arrêts et journées de démonstration
+    territoire: dict = field(default_factory=dict)
     _cache: dict = field(default_factory=dict)
 
     def noms(self) -> list[str]:
@@ -86,8 +88,9 @@ def heure(t: str) -> str:
 
 def charger(dossier: Path) -> Optional[Reel]:
     """Charge les sorties du pipeline ; None si elles sont absentes (l'application reste en démonstration)."""
-    serie_f, zones_f = dossier / "serie_zone_heure.parquet", dossier / "zones_dakar.csv"
-    if not serie_f.exists() or not zones_f.exists():
+    serie_f = dossier / "serie_zone_heure.parquet"
+    zones_f = next((f for f in (dossier / "zones.csv", dossier / "zones_dakar.csv") if f.exists()), None)
+    if not serie_f.exists() or zones_f is None:
         return None
     try:
         import pandas as pd
@@ -136,10 +139,18 @@ def charger(dossier: Path) -> Optional[Reel]:
         noms = {int(z["arr_id"]): z["zone"] for z in zones}
         od = flux[(flux.origine > 0) & (flux.destination > 0)].groupby(["origine", "destination"])["deplacements"].sum()
         for (o, d), n in od.sort_values(ascending=False).items():
+            if o not in noms or d not in noms:
+                continue
             if len(voisins.setdefault(noms[o], [])) < 3:
                 voisins[noms[o]].append(noms[d])
 
-    log.info("Données réelles chargées : %d zones, %d heures-zones", len(zones), len(lignes))
+    territoire_f = dossier / "territoire.json"
+    territoire = (json.loads(territoire_f.read_text(encoding="utf-8")) if territoire_f.exists() else {
+        "nom": "Dakar", "pays": "Sénégal", "mention": "Données réelles D4D-Sénégal (Orange, 2013), région de Dakar",
+        "flotte": {k: {"lignes_actives": v[0], "bus_en_reserve": v[1], "capacite": 60} for k, v in FLOTTE.items()},
+        "journees": JOURNEES,
+    })
+    log.info("Données réelles chargées : %s, %d zones, %d heures-zones", territoire["nom"], len(zones), len(lignes))
     return Reel(zones=zones, serie=lignes, voisins=voisins, seuils=seuils, resultats=resultats,
                 debut=min(k[1] for k in lignes) + ":00", fin=max(k[1] for k in lignes) + ":00",
-                caracteristiques=feats, modeles=modeles, entrees=entrees)
+                caracteristiques=feats, modeles=modeles, entrees=entrees, territoire=territoire)

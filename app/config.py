@@ -19,8 +19,17 @@ class Settings(BaseSettings):
     backend_url: str = "http://localhost:8080"
     # PostgreSQL pour conserver traces, recommandations, manques et simulations ; vide = en mémoire
     database_url: str = ""
-    # Sorties du pipeline D4D (séries, zones, modèles) ; absentes = données de démonstration
-    donnees_dir: Path = Path(__file__).resolve().parents[1] / "pipeline" / "sortie"
+    # Territoire présenté : « yaounde » (profils de Dakar transposés, par défaut) ou « dakar » (données réelles brutes)
+    territoire: str = "yaounde"
+    # Sorties du pipeline D4D ; vide = déduit du territoire ; absentes = données de démonstration
+    donnees_dir: Optional[Path] = None
+
+    def dossier_donnees(self) -> Path:
+        if self.donnees_dir:
+            return self.donnees_dir
+        sortie = Path(__file__).resolve().parents[1] / "pipeline" / "sortie"
+        yaounde = sortie / "yaounde"
+        return yaounde if self.territoire == "yaounde" and (yaounde / "serie_zone_heure.parquet").exists() else sortie
 
 
 settings = Settings()

@@ -121,12 +121,8 @@ def traffic(zone: str) -> Optional[dict]:
 def fleet(zone: str) -> Optional[dict]:
     if REEL is None:
         return FLEET.get(zone)
-    from app.agents.reel import FLOTTE
-
-    if zone not in FLOTTE:
-        return None
-    lignes, reserve = FLOTTE[zone]
-    return {"lignes_actives": lignes, "bus_en_reserve": reserve, "capacite": 60}
+    flotte = REEL.territoire.get("flotte", {}).get(zone)
+    return dict(flotte) if flotte else None
 
 
 def neighbors(zone: str) -> list[str]:
@@ -163,4 +159,5 @@ def historique(zone: str, heures: int = 24) -> list[dict]:
 
 
 def stops() -> list[dict]:
-    return [dict(s) for s in STOPS]
+    arrets = REEL.territoire.get("arrets") if REEL else None
+    return [dict(s) for s in (arrets or STOPS)]

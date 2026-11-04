@@ -4,6 +4,7 @@
   explorer   volumes, période couverte, heures manquantes, valeurs suspectes (rapport Markdown)
   agreger    nettoyage, sélection de la région de Dakar, agrégation par arrondissement et par heure
   indice     recalcule seulement l'indice de tension des séries déjà agrégées (sans le disque)
+  transposer profils de Dakar transposés sur les 7 communes de Yaoundé (sortie/yaounde, sans le disque)
   entrainer  modèle de prévision de l'indice de tension à 1 h et 2 h (sans le disque)
 
 Les fichiers bruts sont lus en place, compressés, sans jamais être modifiés ni copiés.
@@ -448,6 +449,77 @@ def agreger(source: Path) -> None:
         print(f"  - {nom} ({taille((SORTIE / nom).stat().st_size)})")
 
 
+# ---------------------------------------------------------------------------------------- Transposition sur Yaoundé
+
+def transposer(_source: Path | None) -> None:
+    """Profils réels de Dakar transposés sur les 7 communes de Yaoundé (dossier sortie/yaounde), sans le disque."""
+    import json
+
+    sys.path.insert(0, str(Path(__file__).resolve().parent))
+    import yaounde
+
+    serie_f, zones_f, flux_f = SORTIE / "serie_zone_heure.parquet", SORTIE / "zones_dakar.csv", SORTIE / "flux_zone_heure.parquet"
+    if not serie_f.exists() or not zones_f.exists():
+        sys.exit("Séries de Dakar introuvables : lancer d'abord l'étape « agreger ».")
+    dossier = SORTIE / "yaounde"
+    dossier.mkdir(exist_ok=True)
+    av = Avancement(3)
+
+    av.etape("Correspondance des communes de Yaoundé avec les arrondissements de Dakar")
+    con = duckdb.connect()
+    con.execute("SET enable_progress_bar = false")
+    con.execute(f"CREATE TABLE zd AS SELECT * FROM read_csv('{zones_f.as_posix()}', delim = ';', header = true)")
+    dakar = {z.upper(): a for a, z in con.execute("SELECT arr_id, zone FROM zd").fetchall()}
+    lignes = []
+    for commune, (source, role, lon, lat) in yaounde.CORRESPONDANCE.items():
+        arr_id = dakar[source]
+        lignes.append((arr_id, commune, "Mfoundi", None, lon, lat, source.title(), role))
+        av.info(f"{commune} ← {source.title()} : {role}")
+    con.execute("CREATE TABLE zy (arr_id INTEGER, zone VARCHAR, departement VARCHAR, antennes INTEGER, lon DOUBLE, "
+                "lat DOUBLE, profil_dakar VARCHAR, role VARCHAR)")
+    con.executemany("INSERT INTO zy VALUES (?, ?, ?, ?, ?, ?, ?, ?)", lignes)
+    av.fin(f"{len(lignes)} communes")
+
+    av.etape("Séries et flux transposés")
+    # L'identifiant interne reste celui de l'arrondissement source : le modèle reconnaît la zone dont il a appris le profil
+    con.execute(f"""COPY (SELECT s.* EXCLUDE (zone), y.zone FROM read_parquet('{serie_f.as_posix()}') s JOIN zy y USING (arr_id)
+                          ORDER BY t, arr_id) TO '{(dossier / 'serie_zone_heure.parquet').as_posix()}' (FORMAT parquet)""")
+    if flux_f.exists():
+        # Déplacements vers ou depuis un arrondissement sans équivalent : rangés dans la zone 0 (hors des 7 communes)
+        con.execute(f"""COPY (
+            SELECT t, CASE WHEN origine IN (SELECT arr_id FROM zy) THEN origine ELSE 0 END AS origine,
+                      CASE WHEN destination IN (SELECT arr_id FROM zy) THEN destination ELSE 0 END AS destination,
+                      sum(deplacements)::BIGINT AS deplacements
+            FROM read_parquet('{flux_f.as_posix()}') GROUP BY ALL HAVING origine > 0 OR destination > 0 ORDER BY 1, 2, 3)
+            TO '{(dossier / 'flux_zone_heure.parquet').as_posix()}' (FORMAT parquet)""")
+    con.execute(f"COPY zy TO '{(dossier / 'zones.csv').as_posix()}' (HEADER, DELIMITER ';')")
+    n = con.execute(f"SELECT count(*) FROM read_parquet('{(dossier / 'serie_zone_heure.parquet').as_posix()}')").fetchone()[0]
+    av.fin(f"{nombre(n)} heures-zones")
+
+    av.etape("Description du territoire")
+    territoire = {
+        "nom": "Yaoundé", "pays": "Cameroun", "mention": yaounde.MENTION,
+        "flotte": {k: {"lignes_actives": v[0], "bus_en_reserve": v[1], "capacite": 60} for k, v in yaounde.FLOTTE.items()},
+        "arrets": yaounde.ARRETS, "journees": yaounde.JOURNEES,
+        "correspondance": {k: {"profil_dakar": v[0].title(), "role": v[1]} for k, v in yaounde.CORRESPONDANCE.items()},
+    }
+    (dossier / "territoire.json").write_text(json.dumps(territoire, ensure_ascii=False, indent=2), encoding="utf-8")
+    (dossier / "LISEZMOI.md").write_text("\n".join([
+        "# FlowPulse sur Yaoundé : profils transposés", "", yaounde.MENTION + ".", "",
+        "| Commune | Profil repris (Dakar) | Rôle urbain |", "| --- | --- | --- |",
+        *[f"| {k} | {v[0].title()} | {v[1]} |" for k, v in yaounde.CORRESPONDANCE.items()], "",
+        "- Repris : les profils horaires réels (rythme de la journée, de la semaine, des fêtes) et l'indice de tension, "
+        "relatif à chaque zone.",
+        "- Non repris : les volumes (appels, déplacements), qui décrivent Dakar et non Yaoundé. Positions des communes approximatives.",
+        "- Flotte, lignes et arrêts : données de démonstration (aucun exploitant n'a fourni de données).",
+        "- Dates : celles de Dakar en 2013 ; les libellés des journées indiquent le profil rejoué.",
+        "- Pour un déploiement réel : les mêmes étapes du pipeline sur les données d'un opérateur camerounais (MTN, Orange), "
+        "dans le cadre de la loi n° 2024/017 sur les données personnelles.", ""]), encoding="utf-8")
+    av.fin()
+    print(f"\nTransposition terminée en {av.total_ecoule()}. Résultats dans {dossier}.")
+    print("Étape suivante : python -I pipeline\\d4d.py entrainer --sortie pipeline\\sortie\\yaounde")
+
+
 def entrainer(_source: Path | None) -> None:
     """Prévision de l'indice de tension par zone, à partir des séries agrégées (le disque n'est plus nécessaire)."""
     sys.path.insert(0, str(Path(__file__).resolve().parent))
@@ -462,7 +534,7 @@ def entrainer(_source: Path | None) -> None:
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("etape", choices=["explorer", "agreger", "indice", "entrainer"])
+    parser.add_argument("etape", choices=["explorer", "agreger", "indice", "transposer", "entrainer"])
     parser.add_argument("--source", type=Path, help="dossier data du disque (contient SET1, SET2, ContextData) ; "
                                                      "inutile pour « entrainer »")
     parser.add_argument("--sortie", type=Path, default=SORTIE, help=f"dossier des résultats (défaut : {SORTIE})")
@@ -471,7 +543,7 @@ def main() -> None:
         parser.error(f"l'étape « {args.etape} » a besoin de --source (le dossier data du disque)")
     globals()["SORTIE"] = args.sortie
     sys.stdout.reconfigure(encoding="utf-8")  # barres et accents corrects dans la console Windows
-    {"explorer": explorer, "agreger": agreger, "indice": indice, "entrainer": entrainer}[args.etape](args.source)
+    {"explorer": explorer, "agreger": agreger, "indice": indice, "transposer": transposer, "entrainer": entrainer}[args.etape](args.source)
 
 
 if __name__ == "__main__":

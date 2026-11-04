@@ -252,6 +252,10 @@ def donnees_reelles(tmp_path, monkeypatch):
     (tmp_path / "zones_dakar.csv").write_text(
         "arr_id;zone;departement;antennes;lon;lat\n3;Grand Dakar;DAKAR;73;-17.45;14.70\n4;Dakar Plateau;DAKAR;74;-17.43;14.67\n",
         encoding="utf-8")
+    (tmp_path / "territoire.json").write_text(json.dumps({
+        "nom": "Yaoundé", "pays": "Cameroun", "mention": "Profils transposés",
+        "flotte": {"Grand Dakar": {"lignes_actives": ["Ligne 1 Poste centrale – Mvan"], "bus_en_reserve": 3, "capacite": 60}},
+        "journees": [{"t": "2013-11-12T18:00", "libelle": "Mardi ordinaire"}]}), encoding="utf-8")
     assert data.activer(tmp_path)
     yield
     monkeypatch.setattr(data, "REEL", None)
@@ -259,7 +263,9 @@ def donnees_reelles(tmp_path, monkeypatch):
 
 def test_donnees_reelles_et_horloge(no_kb, donnees_reelles):
     client = TestClient(app)
-    assert client.get("/ai/horloge").json()["source"] == "d4d"
+    horloge = client.get("/ai/horloge").json()
+    assert horloge["source"] == "d4d" and horloge["territoire"] == "Yaoundé" and horloge["journees"][0]["libelle"] == "Mardi ordinaire"
+    assert data.fleet("Grand Dakar")["lignes_actives"] == ["Ligne 1 Poste centrale – Mvan"]
     assert client.post("/ai/horloge", json={"t": "2013-11-12T18:00"}).json()["t"] == "2013-11-12T18:00"
     zones = {z["zone"]: z for z in client.get("/ai/zones").json()}
     assert zones["Grand Dakar"]["niveau_congestion"] == 92 and zones["Grand Dakar"]["lon"] == -17.45

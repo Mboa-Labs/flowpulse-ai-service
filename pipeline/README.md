@@ -180,6 +180,18 @@ python -I pipeline\d4d.py indice
 
 Relancer ensuite l'étape 5 (le modèle apprend sur l'indice).
 
+## Étape 4 bis : transposer sur Yaoundé
+
+FlowPulse est conçu pour Yaoundé, mais aucune donnée d'opérateur camerounais n'est accessible : la méthode est validée sur les données réelles de Dakar, puis présentée sur les **7 communes d'arrondissement de Yaoundé**. Chaque commune reçoit le profil horaire réel d'un arrondissement de Dakar au rôle urbain comparable (correspondance dans [`yaounde.py`](yaounde.py)). Seuls les profils et l'indice de tension, relatif à chaque zone, sont repris ; les volumes ne décrivent pas Yaoundé. L'application l'indique à l'écran.
+
+```powershell
+python -I pipeline\d4d.py transposer
+```
+
+Quelques secondes, sans le disque. Résultats dans `pipeline\sortie\yaounde\` : `zones.csv`, `serie_zone_heure.parquet`, `flux_zone_heure.parquet`, `territoire.json` (flotte, arrêts et journées de démonstration de Yaoundé), `LISEZMOI.md`. Entraîner ensuite le modèle sur ces séries (étape 5, avec `--sortie pipeline\sortie\yaounde`).
+
+Le service IA présente Yaoundé par défaut (`FLOWPULSE_TERRITOIRE=yaounde`) ; `dakar` rejoue les données réelles brutes de Dakar.
+
 ## Étape 5 : entraîner le modèle de prévision
 
 Nécessite l'étape 4. **Le disque n'est plus nécessaire** : l'entraînement part de `serie_zone_heure.parquet`. Aucune carte graphique n'est utile ; un ordinateur portable suffit (moins de 1 Go de mémoire).
@@ -209,6 +221,12 @@ Ce que fait l'étape :
 
    ```powershell
    python -I pipeline\d4d.py entrainer
+   ```
+
+   Pour Yaoundé (après l'étape 4 bis) :
+
+   ```powershell
+   python -I pipeline\d4d.py entrainer --sortie pipeline\sortie\yaounde
    ```
 
 - **Durée :** de 1 à 5 minutes.

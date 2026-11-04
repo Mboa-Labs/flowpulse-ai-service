@@ -21,7 +21,7 @@ from app.config import settings
 @asynccontextmanager
 async def lifespan(_: FastAPI):
     persistence.init(persistence.connect(settings.database_url))
-    data.activer(settings.donnees_dir)
+    data.activer(settings.dossier_donnees())
     yield
     persistence.flush()
 
@@ -132,12 +132,13 @@ def zone_serie(zone: str, heures: int = Query(24, ge=1, le=168)) -> list[dict]:
 @app.get("/ai/horloge")
 def get_horloge() -> dict:
     """Source des données et, pour les données réelles, l'instant de 2013 rejoué et les journées proposées."""
-    from app.agents import reel
-
     if data.REEL is None:
         return {"source": data.source(), "t": None, "journees": []}
+    t = data.REEL.territoire
     return {"source": data.source(), "t": data.horloge(), "debut": data.REEL.debut, "fin": data.REEL.fin,
-            "journees": reel.JOURNEES, "modele": bool(data.REEL.seuils), "seuils_alerte": data.REEL.seuils}
+            "journees": t.get("journees", []), "modele": bool(data.REEL.seuils), "seuils_alerte": data.REEL.seuils,
+            "territoire": t.get("nom"), "pays": t.get("pays"), "mention": t.get("mention"),
+            "correspondance": t.get("correspondance")}
 
 
 @app.post("/ai/horloge")
