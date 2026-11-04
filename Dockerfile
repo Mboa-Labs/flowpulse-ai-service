@@ -6,7 +6,7 @@ COPY requirements.txt .
 # Délais et reprises élevés : les connexions lentes coupent sinon le téléchargement des paquets
 RUN pip install --no-cache-dir --default-timeout=120 --retries 10 -r requirements.txt
 COPY app ./app
-# Code du pipeline : le service réutilise le calcul des caractéristiques du modèle
-COPY pipeline/*.py ./pipeline/
+# Code du pipeline (calcul des caractéristiques du modèle) et contours des communes pour la carte
+COPY pipeline/*.py pipeline/*.geojson ./pipeline/
 EXPOSE 8000
 CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
