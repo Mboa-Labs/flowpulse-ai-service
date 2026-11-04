@@ -1,0 +1,173 @@
+{
+  "nom": "Yaoundé",
+  "pays": "Cameroun",
+  "mention": "Profils de mobilité réels de Dakar (D4D-Sénégal, 2013) transposés sur les 7 communes de Yaoundé, en attendant les données d'un opérateur camerounais",
+  "flotte": {
+    "Yaoundé I": {
+      "lignes_actives": [
+        "Ligne 1 Poste centrale – Mvan",
+        "Ligne 4 Poste centrale – Nkolbisson"
+      ],
+      "bus_en_reserve": 4,
+      "capacite": 60
+    },
+    "Yaoundé II": {
+      "lignes_actives": [
+        "Ligne 2 Mokolo – Essos",
+        "Ligne 4 Poste centrale – Nkolbisson"
+      ],
+      "bus_en_reserve": 3,
+      "capacite": 60
+    },
+    "Yaoundé III": {
+      "lignes_actives": [
+        "Ligne 5 Efoulan – Poste centrale"
+      ],
+      "bus_en_reserve": 2,
+      "capacite": 60
+    },
+    "Yaoundé IV": {
+      "lignes_actives": [
+        "Ligne 1 Poste centrale – Mvan",
+        "Ligne 6 Ekounou – Mokolo"
+      ],
+      "bus_en_reserve": 4,
+      "capacite": 60
+    },
+    "Yaoundé V": {
+      "lignes_actives": [
+        "Ligne 2 Mokolo – Essos"
+      ],
+      "bus_en_reserve": 3,
+      "capacite": 60
+    },
+    "Yaoundé VI": {
+      "lignes_actives": [
+        "Ligne 3 Biyem-Assi – Poste centrale"
+      ],
+      "bus_en_reserve": 3,
+      "capacite": 60
+    },
+    "Yaoundé VII": {
+      "lignes_actives": [
+        "Ligne 4 Poste centrale – Nkolbisson"
+      ],
+      "bus_en_reserve": 2,
+      "capacite": 60
+    }
+  },
+  "arrets": [
+    {
+      "arret": "Poste centrale",
+      "zone": "Yaoundé I",
+      "ligne": "Ligne 1 Poste centrale – Mvan",
+      "demande_par_heure": 590,
+      "bus_par_heure": 7
+    },
+    {
+      "arret": "Carrefour Warda",
+      "zone": "Yaoundé I",
+      "ligne": "Ligne 4 Poste centrale – Nkolbisson",
+      "demande_par_heure": 415,
+      "bus_par_heure": 6
+    },
+    {
+      "arret": "Marché Mokolo",
+      "zone": "Yaoundé II",
+      "ligne": "Ligne 2 Mokolo – Essos",
+      "demande_par_heure": 455,
+      "bus_par_heure": 8
+    },
+    {
+      "arret": "Mvan",
+      "zone": "Yaoundé IV",
+      "ligne": "Ligne 1 Poste centrale – Mvan",
+      "demande_par_heure": 355,
+      "bus_par_heure": 7
+    },
+    {
+      "arret": "Ekounou",
+      "zone": "Yaoundé IV",
+      "ligne": "Ligne 6 Ekounou – Mokolo",
+      "demande_par_heure": 250,
+      "bus_par_heure": 6
+    },
+    {
+      "arret": "Essos",
+      "zone": "Yaoundé V",
+      "ligne": "Ligne 2 Mokolo – Essos",
+      "demande_par_heure": 180,
+      "bus_par_heure": 5
+    },
+    {
+      "arret": "Biyem-Assi",
+      "zone": "Yaoundé VI",
+      "ligne": "Ligne 3 Biyem-Assi – Poste centrale",
+      "demande_par_heure": 130,
+      "bus_par_heure": 4
+    },
+    {
+      "arret": "Nkolbisson",
+      "zone": "Yaoundé VII",
+      "ligne": "Ligne 4 Poste centrale – Nkolbisson",
+      "demande_par_heure": 95,
+      "bus_par_heure": 4
+    }
+  ],
+  "journees": [
+    {
+      "t": "2013-11-12T18:00",
+      "libelle": "Mardi ordinaire, pointe du soir"
+    },
+    {
+      "t": "2013-11-12T12:00",
+      "libelle": "Mardi ordinaire, mi-journée"
+    },
+    {
+      "t": "2013-12-31T21:00",
+      "libelle": "Soirée du 31 décembre"
+    },
+    {
+      "t": "2013-12-22T20:00",
+      "libelle": "Grand rassemblement religieux (profil : Magal 2013)"
+    },
+    {
+      "t": "2013-10-15T12:00",
+      "libelle": "Fête religieuse (profil : Tabaski 2013)"
+    },
+    {
+      "t": "2013-08-08T12:00",
+      "libelle": "Fête de fin de jeûne (profil : Korité 2013)"
+    }
+  ],
+  "correspondance": {
+    "Yaoundé I": {
+      "profil_dakar": "Dakar Plateau",
+      "role": "Centre administratif et d'affaires (Nlongkak, Bastos, ministères)"
+    },
+    "Yaoundé II": {
+      "profil_dakar": "Grand Dakar",
+      "role": "Marchés et quartiers denses (Mokolo, Tsinga, Briqueterie)"
+    },
+    "Yaoundé III": {
+      "profil_dakar": "Almadies",
+      "role": "Mixte administratif et résidentiel (Efoulan, Nsimeyong, Obili)"
+    },
+    "Yaoundé IV": {
+      "profil_dakar": "Pikine Dagoudane",
+      "role": "Grande périphérie très peuplée (Kondengui, Mvan, Ekounou)"
+    },
+    "Yaoundé V": {
+      "profil_dakar": "Parcelles Assainies",
+      "role": "Résidentiel dense (Essos, Mimboman, Ngousso)"
+    },
+    "Yaoundé VI": {
+      "profil_dakar": "Guediawaye",
+      "role": "Résidentiel populaire (Biyem-Assi, Mendong, Etoug-Ebe)"
+    },
+    "Yaoundé VII": {
+      "profil_dakar": "Rufisque",
+      "role": "Périphérie en développement (Nkolbisson, Oyom-Abang)"
+    }
+  }
+}

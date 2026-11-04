@@ -1,0 +1,8 @@
+arr_id;zone;departement;antennes;lon;lat;profil_dakar;role
+4;Yaoundé I;Mfoundi;;11.515;3.89;Dakar Plateau;Centre administratif et d'affaires (Nlongkak, Bastos, ministères)
+3;Yaoundé II;Mfoundi;;11.495;3.88;Grand Dakar;Marchés et quartiers denses (Mokolo, Tsinga, Briqueterie)
+2;Yaoundé III;Mfoundi;;11.5;3.83;Almadies;Mixte administratif et résidentiel (Efoulan, Nsimeyong, Obili)
+6;Yaoundé IV;Mfoundi;;11.54;3.835;Pikine Dagoudane;Grande périphérie très peuplée (Kondengui, Mvan, Ekounou)
+1;Yaoundé V;Mfoundi;;11.545;3.875;Parcelles Assainies;Résidentiel dense (Essos, Mimboman, Ngousso)
+5;Yaoundé VI;Mfoundi;;11.47;3.835;Guediawaye;Résidentiel populaire (Biyem-Assi, Mendong, Etoug-Ebe)
+9;Yaoundé VII;Mfoundi;;11.45;3.875;Rufisque;Périphérie en développement (Nkolbisson, Oyom-Abang)

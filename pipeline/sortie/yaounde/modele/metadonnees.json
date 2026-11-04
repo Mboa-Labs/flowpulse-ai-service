@@ -1,0 +1,255 @@
+{
+  "cible": "indice_tension (0 à 100) de chaque arrondissement de Dakar",
+  "horizons_h": [
+    1,
+    2
+  ],
+  "entrees": [
+    "zone_id",
+    "heure",
+    "jour_semaine",
+    "week_end",
+    "mois",
+    "jour_particulier",
+    "indice_tension",
+    "tension_moins_1h",
+    "tension_moins_2h",
+    "tension_moins_3h",
+    "tension_moins_24h",
+    "tension_moins_168h",
+    "tension_moy_3h",
+    "ecart_habituel",
+    "tension_region",
+    "arrivees",
+    "departs",
+    "mouvements_moins_1h",
+    "arrivees_moins_1h",
+    "mouvements_par_present",
+    "antennes_actives"
+  ],
+  "seuil_alerte": 85,
+  "rappel_vise": 0.75,
+  "seuils_alerte_modele": {
+    "1h": 85.0,
+    "2h": 84.0
+  },
+  "apprentissage": "2013-01-01 → 2013-10-01",
+  "validation": "2013-10-01 → 2013-11-01",
+  "test": "2013-11-01 → 2013-12-31",
+  "zones": {
+    "1": "Yaoundé V",
+    "2": "Yaoundé III",
+    "3": "Yaoundé II",
+    "4": "Yaoundé I",
+    "5": "Yaoundé VI",
+    "6": "Yaoundé IV",
+    "9": "Yaoundé VII"
+  },
+  "jours_particuliers": {
+    "2013-01-01": "Jour de l'an",
+    "2013-01-24": "Maouloud",
+    "2013-04-01": "Lundi de Pâques",
+    "2013-04-04": "Fête de l'indépendance",
+    "2013-05-01": "Fête du travail",
+    "2013-05-09": "Ascension",
+    "2013-05-20": "Lundi de Pentecôte",
+    "2013-08-08": "Korité",
+    "2013-08-15": "Assomption",
+    "2013-10-15": "Tabaski",
+    "2013-11-01": "Toussaint",
+    "2013-11-14": "Tamkharit",
+    "2013-12-22": "Grand Magal de Touba",
+    "2013-12-25": "Noël",
+    "2013-12-31": "Saint-Sylvestre"
+  },
+  "resultats": {
+    "1h": {
+      "seuil_alerte_modele": 85.0,
+      "modele": {
+        "erreur_moyenne": 3.07,
+        "rmse": 5.05,
+        "alertes_reelles": 1034,
+        "alertes_detectees": 0.709,
+        "alertes_justes": 0.703,
+        "points": 10241
+      },
+      "modele_seuil_brut": {
+        "erreur_moyenne": 3.07,
+        "rmse": 5.05,
+        "alertes_reelles": 1034,
+        "alertes_detectees": 0.709,
+        "alertes_justes": 0.703,
+        "points": 10241
+      },
+      "reference_persistance": {
+        "erreur_moyenne": 8.83,
+        "rmse": 11.65,
+        "alertes_reelles": 1034,
+        "alertes_detectees": 0.541,
+        "alertes_justes": 0.543,
+        "points": 10241
+      },
+      "reference_semaine": {
+        "erreur_moyenne": 6.21,
+        "rmse": 10.42,
+        "alertes_reelles": 1034,
+        "alertes_detectees": 0.522,
+        "alertes_justes": 0.562,
+        "points": 10241
+      },
+      "par_zone": {
+        "Yaoundé V": {
+          "erreur_moyenne": 2.96,
+          "rmse": 4.88,
+          "alertes_reelles": 110,
+          "alertes_detectees": 0.636,
+          "alertes_justes": 0.609,
+          "points": 1463
+        },
+        "Yaoundé III": {
+          "erreur_moyenne": 2.93,
+          "rmse": 4.7,
+          "alertes_reelles": 228,
+          "alertes_detectees": 0.803,
+          "alertes_justes": 0.753,
+          "points": 1463
+        },
+        "Yaoundé II": {
+          "erreur_moyenne": 3.13,
+          "rmse": 5.12,
+          "alertes_reelles": 228,
+          "alertes_detectees": 0.772,
+          "alertes_justes": 0.793,
+          "points": 1463
+        },
+        "Yaoundé I": {
+          "erreur_moyenne": 2.65,
+          "rmse": 4.16,
+          "alertes_reelles": 141,
+          "alertes_detectees": 0.851,
+          "alertes_justes": 0.902,
+          "points": 1463
+        },
+        "Yaoundé VI": {
+          "erreur_moyenne": 3.11,
+          "rmse": 5.31,
+          "alertes_reelles": 107,
+          "alertes_detectees": 0.57,
+          "alertes_justes": 0.587,
+          "points": 1463
+        },
+        "Yaoundé IV": {
+          "erreur_moyenne": 3.21,
+          "rmse": 5.36,
+          "alertes_reelles": 118,
+          "alertes_detectees": 0.576,
+          "alertes_justes": 0.562,
+          "points": 1463
+        },
+        "Yaoundé VII": {
+          "erreur_moyenne": 3.48,
+          "rmse": 5.7,
+          "alertes_reelles": 102,
+          "alertes_detectees": 0.539,
+          "alertes_justes": 0.529,
+          "points": 1463
+        }
+      },
+      "arbres": 851
+    },
+    "2h": {
+      "seuil_alerte_modele": 84.0,
+      "modele": {
+        "erreur_moyenne": 4.54,
+        "rmse": 7.06,
+        "alertes_reelles": 1034,
+        "alertes_detectees": 0.737,
+        "alertes_justes": 0.622,
+        "points": 10234
+      },
+      "modele_seuil_brut": {
+        "erreur_moyenne": 4.54,
+        "rmse": 7.06,
+        "alertes_reelles": 1034,
+        "alertes_detectees": 0.674,
+        "alertes_justes": 0.632,
+        "points": 10234
+      },
+      "reference_persistance": {
+        "erreur_moyenne": 15.71,
+        "rmse": 20.83,
+        "alertes_reelles": 1034,
+        "alertes_detectees": 0.338,
+        "alertes_justes": 0.34,
+        "points": 10234
+      },
+      "reference_semaine": {
+        "erreur_moyenne": 6.21,
+        "rmse": 10.42,
+        "alertes_reelles": 1034,
+        "alertes_detectees": 0.522,
+        "alertes_justes": 0.562,
+        "points": 10234
+      },
+      "par_zone": {
+        "Yaoundé V": {
+          "erreur_moyenne": 4.68,
+          "rmse": 7.3,
+          "alertes_reelles": 110,
+          "alertes_detectees": 0.773,
+          "alertes_justes": 0.528,
+          "points": 1462
+        },
+        "Yaoundé III": {
+          "erreur_moyenne": 4.51,
+          "rmse": 6.74,
+          "alertes_reelles": 228,
+          "alertes_detectees": 0.846,
+          "alertes_justes": 0.659,
+          "points": 1462
+        },
+        "Yaoundé II": {
+          "erreur_moyenne": 4.68,
+          "rmse": 7.01,
+          "alertes_reelles": 228,
+          "alertes_detectees": 0.741,
+          "alertes_justes": 0.761,
+          "points": 1462
+        },
+        "Yaoundé I": {
+          "erreur_moyenne": 3.56,
+          "rmse": 5.3,
+          "alertes_reelles": 141,
+          "alertes_detectees": 0.766,
+          "alertes_justes": 0.885,
+          "points": 1462
+        },
+        "Yaoundé VI": {
+          "erreur_moyenne": 4.46,
+          "rmse": 7.23,
+          "alertes_reelles": 107,
+          "alertes_detectees": 0.692,
+          "alertes_justes": 0.493,
+          "points": 1462
+        },
+        "Yaoundé IV": {
+          "erreur_moyenne": 4.74,
+          "rmse": 7.53,
+          "alertes_reelles": 118,
+          "alertes_detectees": 0.653,
+          "alertes_justes": 0.478,
+          "points": 1462
+        },
+        "Yaoundé VII": {
+          "erreur_moyenne": 5.11,
+          "rmse": 8.02,
+          "alertes_reelles": 102,
+          "alertes_detectees": 0.549,
+          "alertes_justes": 0.479,
+          "points": 1462
+        }
+      },
+      "arbres": 1138
+    }
+  }
+}
