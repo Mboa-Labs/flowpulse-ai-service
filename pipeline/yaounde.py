@@ -3,18 +3,19 @@
 Aucune donnée d'opérateur camerounais n'est accessible : FlowPulse est validé sur les données réelles et ouvertes
 du D4D-Sénégal (Dakar, 2013), puis présenté sur Yaoundé. Chaque commune reçoit le profil horaire réel d'un
 arrondissement de Dakar au rôle urbain comparable. Seuls les profils et l'indice de tension (relatif à chaque zone)
-sont repris ; les volumes ne sont pas ajustés et ne décrivent pas Yaoundé. Les positions sont approximatives.
+sont repris ; les volumes ne sont pas ajustés et ne décrivent pas Yaoundé. Positions et contours des communes :
+geoBoundaries CMR ADM3 (OpenStreetMap), licence ODbL, fichier yaounde_communes.geojson.
 """
 
-# Commune de Yaoundé → (arrondissement de Dakar dont le profil est repris, rôle urbain, longitude, latitude)
+# Commune de Yaoundé → (arrondissement de Dakar dont le profil est repris, rôle urbain, longitude, latitude du centre)
 CORRESPONDANCE = {
-    "Yaoundé I": ("DAKAR PLATEAU", "Centre administratif et d'affaires (Nlongkak, Bastos, ministères)", 11.515, 3.890),
-    "Yaoundé II": ("GRAND DAKAR", "Marchés et quartiers denses (Mokolo, Tsinga, Briqueterie)", 11.495, 3.880),
-    "Yaoundé III": ("ALMADIES", "Mixte administratif et résidentiel (Efoulan, Nsimeyong, Obili)", 11.500, 3.830),
-    "Yaoundé IV": ("PIKINE DAGOUDANE", "Grande périphérie très peuplée (Kondengui, Mvan, Ekounou)", 11.540, 3.835),
-    "Yaoundé V": ("PARCELLES ASSAINIES", "Résidentiel dense (Essos, Mimboman, Ngousso)", 11.545, 3.875),
-    "Yaoundé VI": ("GUEDIAWAYE", "Résidentiel populaire (Biyem-Assi, Mendong, Etoug-Ebe)", 11.470, 3.835),
-    "Yaoundé VII": ("RUFISQUE", "Périphérie en développement (Nkolbisson, Oyom-Abang)", 11.450, 3.875),
+    "Yaoundé I": ("DAKAR PLATEAU", "Centre administratif et d'affaires (Nlongkak, Bastos, ministères)", 11.5216, 3.9283),
+    "Yaoundé II": ("GRAND DAKAR", "Marchés et quartiers denses (Mokolo, Tsinga, Briqueterie)", 11.4889, 3.903),
+    "Yaoundé III": ("ALMADIES", "Mixte administratif et résidentiel (Efoulan, Nsimeyong, Obili)", 11.4747, 3.7825),
+    "Yaoundé IV": ("PIKINE DAGOUDANE", "Grande périphérie très peuplée (Kondengui, Mvan, Ekounou)", 11.5318, 3.8187),
+    "Yaoundé V": ("PARCELLES ASSAINIES", "Résidentiel dense (Essos, Mimboman, Ngousso)", 11.5511, 3.8981),
+    "Yaoundé VI": ("GUEDIAWAYE", "Résidentiel populaire (Biyem-Assi, Mendong, Etoug-Ebe)", 11.4767, 3.8391),
+    "Yaoundé VII": ("RUFISQUE", "Périphérie en développement (Nkolbisson, Oyom-Abang)", 11.4484, 3.875),
 }
 
 # Flotte, lignes et arrêts de démonstration : aucun exploitant n'a fourni de données

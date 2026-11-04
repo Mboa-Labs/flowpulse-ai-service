@@ -504,13 +504,17 @@ def transposer(_source: Path | None) -> None:
         "correspondance": {k: {"profil_dakar": v[0].title(), "role": v[1]} for k, v in yaounde.CORRESPONDANCE.items()},
     }
     (dossier / "territoire.json").write_text(json.dumps(territoire, ensure_ascii=False, indent=2), encoding="utf-8")
+    contours = Path(__file__).resolve().parent / "yaounde_communes.geojson"
+    if contours.exists():  # contours officiels des communes, pour la carte
+        (dossier / "contours.geojson").write_text(contours.read_text(encoding="utf-8"), encoding="utf-8")
     (dossier / "LISEZMOI.md").write_text("\n".join([
         "# FlowPulse sur Yaoundé : profils transposés", "", yaounde.MENTION + ".", "",
         "| Commune | Profil repris (Dakar) | Rôle urbain |", "| --- | --- | --- |",
         *[f"| {k} | {v[0].title()} | {v[1]} |" for k, v in yaounde.CORRESPONDANCE.items()], "",
         "- Repris : les profils horaires réels (rythme de la journée, de la semaine, des fêtes) et l'indice de tension, "
         "relatif à chaque zone.",
-        "- Non repris : les volumes (appels, déplacements), qui décrivent Dakar et non Yaoundé. Positions des communes approximatives.",
+        "- Non repris : les volumes (appels, déplacements), qui décrivent Dakar et non Yaoundé.",
+        "- Contours et centres des communes : geoBoundaries CMR ADM3 (OpenStreetMap), licence ODbL.",
         "- Flotte, lignes et arrêts : données de démonstration (aucun exploitant n'a fourni de données).",
         "- Dates : celles de Dakar en 2013 ; les libellés des journées indiquent le profil rejoué.",
         "- Pour un déploiement réel : les mêmes étapes du pipeline sur les données d'un opérateur camerounais (MTN, Orange), "

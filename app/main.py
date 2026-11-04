@@ -141,6 +141,14 @@ def get_horloge() -> dict:
             "correspondance": t.get("correspondance")}
 
 
+@app.get("/ai/territoire/carte")
+def carte() -> dict:
+    """Contours des zones (GeoJSON) pour la carte ; vide si le territoire n'en fournit pas (repères ponctuels)."""
+    if data.REEL is None or not data.REEL.territoire.get("contours"):
+        return {"type": "FeatureCollection", "features": []}
+    return data.REEL.territoire["contours"]
+
+
 @app.post("/ai/horloge")
 def set_horloge(body: HorlogeIn) -> dict:
     """Change l'instant rejoué ; les écrans et les agents travaillent alors sur ce moment de 2013."""

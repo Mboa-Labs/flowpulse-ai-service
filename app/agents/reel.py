@@ -86,6 +86,17 @@ def heure(t: str) -> str:
     return t.replace(" ", "T")[:13]
 
 
+def centre(anneau: list) -> tuple[float, float]:
+    """Centre de gravité d'un polygone (formule de l'aire signée), arrondi à 5 décimales."""
+    aire = cx = cy = 0.0
+    for (x1, y1), (x2, y2) in zip(anneau, anneau[1:]):
+        k = x1 * y2 - x2 * y1
+        aire, cx, cy = aire + k, cx + (x1 + x2) * k, cy + (y1 + y2) * k
+    if not aire:
+        return round(anneau[0][0], 5), round(anneau[0][1], 5)
+    return round(cx / (3 * aire), 5), round(cy / (3 * aire), 5)
+
+
 def charger(dossier: Path) -> Optional[Reel]:
     """Charge les sorties du pipeline ; None si elles sont absentes (l'application reste en démonstration)."""
     serie_f = dossier / "serie_zone_heure.parquet"
@@ -144,12 +155,27 @@ def charger(dossier: Path) -> Optional[Reel]:
             if len(voisins.setdefault(noms[o], [])) < 3:
                 voisins[noms[o]].append(noms[d])
 
+    # Contours des zones pour la carte : fournis avec les sorties, sinon ceux des communes de Yaoundé
+    contours = None
+    for f in (dossier / "contours.geojson", Path(__file__).resolve().parents[2] / "pipeline" / "yaounde_communes.geojson"):
+        if f.exists():
+            geo = json.loads(f.read_text(encoding="utf-8"))
+            if {ft["properties"]["zone"] for ft in geo["features"]} >= {z["zone"] for z in zones}:
+                contours = geo
+                break
     territoire_f = dossier / "territoire.json"
     territoire = (json.loads(territoire_f.read_text(encoding="utf-8")) if territoire_f.exists() else {
         "nom": "Dakar", "pays": "Sénégal", "mention": "Données réelles D4D-Sénégal (Orange, 2013), région de Dakar",
         "flotte": {k: {"lignes_actives": v[0], "bus_en_reserve": v[1], "capacite": 60} for k, v in FLOTTE.items()},
         "journees": JOURNEES,
     })
+    if contours:
+        territoire = {**territoire, "contours": contours}
+        # Centre de chaque zone : celui de son contour officiel plutôt qu'une position approximative
+        for z in zones:
+            ft = next(f for f in contours["features"] if f["properties"]["zone"] == z["zone"])
+            anneau = ft["geometry"]["coordinates"][0] if ft["geometry"]["type"] == "Polygon" else                 max((p[0] for p in ft["geometry"]["coordinates"]), key=len)
+            z["lon"], z["lat"] = centre(anneau)
     log.info("Données réelles chargées : %s, %d zones, %d heures-zones", territoire["nom"], len(zones), len(lignes))
     return Reel(zones=zones, serie=lignes, voisins=voisins, seuils=seuils, resultats=resultats,
                 debut=min(k[1] for k in lignes) + ":00", fin=max(k[1] for k in lignes) + ":00",
