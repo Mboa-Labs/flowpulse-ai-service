@@ -103,6 +103,7 @@ def traffic(zone: str) -> Optional[dict]:
     else:
         return None
     prev = REEL.prevision(zone, ligne["t"])
+    avant = REEL.ligne(zone, (datetime.fromisoformat(ligne["t"][:13] + ":00") - timedelta(hours=1)).strftime("%Y-%m-%dT%H"))
     return {
         "niveau_congestion": int(ligne["indice_tension"]),
         "vitesse_moyenne": None,  # le dataset ne mesure pas la vitesse
@@ -114,6 +115,10 @@ def traffic(zone: str) -> Optional[dict]:
         "prevision_1h": prev.get(1),
         "prevision_2h": prev.get(2),
         "heure": ligne["t"],
+        # Évolution de l'indice sur la dernière heure (points), pour afficher une tendance
+        "tendance_1h": int(ligne["indice_tension"]) - int(avant["indice_tension"]) if avant else None,
+        # Faux quand les profils sont transposés : appels et déplacements décrivent la ville source, pas celle affichée
+        "volumes_representatifs": not REEL.territoire.get("correspondance"),
         "source": "d4d",
     }
 
@@ -127,6 +132,18 @@ def fleet(zone: str) -> Optional[dict]:
 
 def neighbors(zone: str) -> list[str]:
     return REEL.voisins.get(zone, []) if REEL else NEIGHBORS.get(zone, [])
+
+
+def zone_connue(zone: str) -> bool:
+    """La zone appartient-elle au territoire affiché ? (écarte les objets créés sur un autre territoire)"""
+    return zone in zones()
+
+
+def origine_donnees() -> str:
+    """Phrase courte sur l'origine des données, adaptée au territoire affiché."""
+    if REEL is None:
+        return "Données de démonstration : zones et voisinages fictifs."
+    return REEL.territoire.get("mention") or "Données réelles de mobilité."
 
 
 def position(zone: str) -> Optional[dict]:

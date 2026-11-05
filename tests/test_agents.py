@@ -290,3 +290,15 @@ def test_verdict_reutilise_pour_un_meme_type_de_decision(monkeypatch):
     # Au plus 2 extraits d'un même document
     retenus = policy._selection([passage(), passage(), passage(), passage("CMR-TEL-001", 0.7)])
     assert [p.doc_id for p in retenus] == ["CMR-DEC-001", "CMR-DEC-001", "CMR-TEL-001"]
+
+
+def test_objets_d_un_autre_territoire_masques(no_kb, donnees_reelles):
+    store.set_state("derniere_surveillance", {"trace_id": "T-ancien", "alertes": [
+        {"zone": "Almadies", "niveau": "SATURE", "congestion": 90}, {"zone": "Grand Dakar", "niveau": "SATURE", "congestion": 92}]})
+    client = TestClient(app)
+    alertes = client.get("/ai/watcher/last").json()["alertes"]
+    assert [a["zone"] for a in alertes] == ["Grand Dakar"]  # Almadies n'existe pas dans ce territoire
+    zone = {z["zone"]: z for z in client.get("/ai/zones").json()}["Grand Dakar"]
+    assert zone["volumes_representatifs"] is True  # pas de transposition dans ce jeu de test
+    assert isinstance(zone["tendance_1h"], int)
+

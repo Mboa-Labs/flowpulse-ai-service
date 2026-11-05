@@ -95,7 +95,10 @@ def run() -> tuple[str, list[Alert]]:
 
 def last_run() -> dict:
     """Résultat du dernier passage de surveillance (conservé au redémarrage)."""
-    return store.STATE.get("derniere_surveillance", {"trace_id": None, "alertes": []})
+    run_ = store.STATE.get("derniere_surveillance", {"trace_id": None, "alertes": []})
+    # Une surveillance faite sur un autre territoire (par exemple avant le passage à Yaoundé) n'est pas affichée
+    alertes = [a for a in run_["alertes"] if data.zone_connue(a["zone"])]
+    return {**run_, "alertes": alertes} if len(alertes) == len(run_["alertes"]) else {"trace_id": None, "alertes": alertes}
 
 
 def update_alert(alert_id: str, action: str, par: str, destinataire: Optional[str] = None, note: Optional[str] = None) -> dict:

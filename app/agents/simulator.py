@@ -158,10 +158,10 @@ def run(scenario: Scenario) -> dict:
         "indicateurs": indicateurs,
         "mesures": mesures,
         "hypotheses": [
-            ("Données réelles D4D-Sénégal à l'instant rejoué : la charge de départ d'une zone est son indice de tension ; "
-             f"sa demande, ses déplacements observés dans l'échantillon (×{EXTRAPOLATION} pour l'ensemble des abonnés), "
-             f"dont {round(PART_VOITURE * 100)} % en voiture. Zones voisines : principales destinations réelles des déplacements."
-             if reel else "Modèle de démonstration : zones et voisinages fictifs, en attendant les données réelles."),
+            (f"Point de départ : l'indice de tension de chaque zone à l'instant rejoué. Demande : les déplacements des "
+             f"profils de mobilité, dont {round(PART_VOITURE * 100)} % en voiture. Zones voisines : principales destinations "
+             f"de ces déplacements. {data.origine_donnees()}."
+             if reel else data.origine_donnees()),
             "Temps de parcours : fonction BPR (1 + 0,15 × charge⁴), standard en ingénierie du trafic.",
             f"Fermeture : l'axe porte {round(PART_AXE * 100)} % de la capacité de la zone ; {round(REPORT * 100)} % de son trafic se reporte sur les zones voisines.",
             f"Événement : {round(PART_VOITURE * 100)} % des participants viennent en voiture ({OCCUPATION} personnes par véhicule), arrivées réparties sur la durée.",

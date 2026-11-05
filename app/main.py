@@ -189,7 +189,8 @@ def simulate(body: ScenarioIn) -> dict:
 
 @app.get("/ai/simulations")
 def list_simulations() -> list[dict]:
-    return sorted(store.SIMULATIONS.values(), key=lambda s: s["date"], reverse=True)
+    return sorted((s for s in store.SIMULATIONS.values() if data.zone_connue(s["scenario"]["zone"])),
+                  key=lambda s: s["date"], reverse=True)
 
 
 @app.get("/ai/simulations/{sim_id}")
@@ -248,7 +249,8 @@ def kb_reindex() -> dict:
 
 @app.get("/ai/recommendations")
 def list_recommendations() -> list[dict]:
-    return [asdict(r) for r in store.RECOMMENDATIONS.values()]
+    """Recommandations du territoire affiché (celles d'un autre territoire restent dans le journal)."""
+    return [asdict(r) for r in store.RECOMMENDATIONS.values() if data.zone_connue(r.zone)]
 
 
 @app.get("/ai/recommendations/{reco_id}")
