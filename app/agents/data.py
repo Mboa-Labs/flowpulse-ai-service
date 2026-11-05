@@ -134,6 +134,15 @@ def neighbors(zone: str) -> list[str]:
     return REEL.voisins.get(zone, []) if REEL else NEIGHBORS.get(zone, [])
 
 
+def lieux() -> list[dict]:
+    """Lieux réels du territoire (GeoJSON) : axes, ponts, carrefours, stades, marchés. Vide en démonstration."""
+    return (REEL.territoire.get("lieux") or {}).get("features", []) if REEL else []
+
+
+def lieu(identifiant: str) -> Optional[dict]:
+    return next((f for f in lieux() if f["properties"]["id"] == identifiant), None)
+
+
 def zone_connue(zone: str) -> bool:
     """La zone appartient-elle au territoire affiché ? (écarte les objets créés sur un autre territoire)"""
     return zone in zones()

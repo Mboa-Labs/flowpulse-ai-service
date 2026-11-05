@@ -169,6 +169,15 @@ def charger(dossier: Path) -> Optional[Reel]:
         "flotte": {k: {"lignes_actives": v[0], "bus_en_reserve": v[1], "capacite": 60} for k, v in FLOTTE.items()},
         "journees": JOURNEES,
     })
+    # Lieux réels du territoire (axes, ponts, carrefours, stades, marchés), pour les simulations
+    noms = {z["zone"] for z in zones}
+    for f in (dossier / "lieux.geojson", Path(__file__).resolve().parents[2] / "pipeline" / "yaounde_lieux.geojson"):
+        if f.exists():
+            geo = json.loads(f.read_text(encoding="utf-8"))
+            retenus = [ft for ft in geo["features"] if ft["properties"].get("zone") in noms]
+            if retenus:
+                territoire = {**territoire, "lieux": {"type": "FeatureCollection", "features": retenus}}
+                break
     if contours:
         territoire = {**territoire, "contours": contours}
         # Centre de chaque zone : celui de son contour officiel plutôt qu'une position approximative

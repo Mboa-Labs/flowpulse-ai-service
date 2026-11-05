@@ -90,6 +90,7 @@ class ScenarioIn(BaseModel):
     fin: str = Field("12:00", pattern=HEURE)
     participants: int = Field(0, ge=0, le=200_000)
     nb_bus: int = Field(0, ge=0, le=50)
+    lieu: Optional[str] = Field(None, max_length=80, pattern=r"^[a-z0-9-]+$")
 
 
 class AlertAction(BaseModel):
@@ -147,6 +148,12 @@ def carte() -> dict:
     if data.REEL is None or not data.REEL.territoire.get("contours"):
         return {"type": "FeatureCollection", "features": []}
     return data.REEL.territoire["contours"]
+
+
+@app.get("/ai/lieux")
+def lieux() -> dict:
+    """Lieux réels proposés pour les simulations (OpenStreetMap) : axes, ponts, carrefours, stades, marchés."""
+    return {"type": "FeatureCollection", "features": data.lieux()}
 
 
 @app.post("/ai/horloge")

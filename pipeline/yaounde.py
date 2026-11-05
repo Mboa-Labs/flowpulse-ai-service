@@ -45,9 +45,9 @@ JOURNEES = [
     {"t": "2013-11-12T18:00", "libelle": "Mardi ordinaire, pointe du soir"},
     {"t": "2013-11-12T12:00", "libelle": "Mardi ordinaire, mi-journée"},
     {"t": "2013-12-31T21:00", "libelle": "Soirée du 31 décembre"},
-    {"t": "2013-12-22T20:00", "libelle": "Grand rassemblement religieux (profil : Magal 2013)"},
-    {"t": "2013-10-15T12:00", "libelle": "Fête religieuse (profil : Tabaski 2013)"},
-    {"t": "2013-08-08T12:00", "libelle": "Fête de fin de jeûne (profil : Korité 2013)"},
+    {"t": "2013-12-22T20:00", "libelle": "Grand rassemblement, soirée"},
+    {"t": "2013-10-15T12:00", "libelle": "Fête du Mouton (Tabaski), midi"},
+    {"t": "2013-08-08T12:00", "libelle": "Fête du Ramadan, midi"},
 ]
 
 MENTION = ("Profils de mobilité réels de Dakar (D4D-Sénégal, 2013) transposés sur les 7 communes de Yaoundé, "

@@ -302,3 +302,19 @@ def test_objets_d_un_autre_territoire_masques(no_kb, donnees_reelles):
     assert zone["volumes_representatifs"] is True  # pas de transposition dans ce jeu de test
     assert isinstance(zone["tendance_1h"], int)
 
+
+
+def test_simulation_sur_un_lieu_reel(no_kb, monkeypatch):
+    a, b = data.zones()[:2]  # zones du territoire chargé (démonstration ou jeu de test)
+    axe = {"type": "Feature", "geometry": {"type": "LineString", "coordinates": [[0, 0], [1, 1]]},
+           "properties": {"id": "route-corniche", "nom": "Route de la Corniche", "type": "route", "zone": a,
+                          "parts": {a: 0.7, b: 0.3}}}
+    monkeypatch.setattr(data, "lieux", lambda: [axe])
+    client = TestClient(app)
+    assert client.get("/ai/lieux").json()["features"][0]["properties"]["id"] == "route-corniche"
+    sim = client.post("/ai/simulations", json={"type": "fermeture", "zone": b, "lieu": "route-corniche"}).json()
+    assert sim["scenario"]["zone"] == a  # la zone découle du lieu
+    assert "Route de la Corniche" in sim["libelle"]
+    assert any(f"{a} (70 %)" in h for h in sim["hypotheses"])
+    assert any("OpenStreetMap" in h for h in sim["hypotheses"])
+    assert client.post("/ai/simulations", json={"type": "fermeture", "zone": a, "lieu": "inconnu"}).status_code == 422

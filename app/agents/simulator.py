@@ -11,7 +11,7 @@ from __future__ import annotations
 
 import time
 from dataclasses import asdict, dataclass
-from typing import Literal
+from typing import Literal, Optional
 
 from app.agents import data, optimizer, policy, store, watcher
 
@@ -36,6 +36,11 @@ class Scenario:
     fin: str = "12:00"
     participants: int = 0
     nb_bus: int = 0
+    lieu: Optional[str] = None  # identifiant d'un lieu réel (axe, pont, stade…) ; la zone en découle
+
+    def nom_lieu(self) -> Optional[str]:
+        f = data.lieu(self.lieu) if self.lieu else None
+        return f["properties"]["nom"] if f else None
 
     def duree_h(self) -> float:
         h1, m1 = map(int, self.debut.split(":"))
@@ -44,10 +49,12 @@ class Scenario:
 
     def libelle(self) -> str:
         quand = f"de {self.debut} à {self.fin}"
+        nom = self.nom_lieu()
         if self.type == "fermeture":
-            return f"Fermeture temporaire d'un axe principal à {self.zone} {quand}"
+            return f"Fermeture temporaire : {nom} ({self.zone}) {quand}" if nom else f"Fermeture temporaire d'un axe principal à {self.zone} {quand}"
         if self.type == "evenement":
-            return f"Événement de {self.participants:,} participants à {self.zone} {quand}".replace(",", " ")
+            ou = f"{nom} ({self.zone})" if nom else self.zone
+            return f"Événement de {self.participants:,} participants à {ou} {quand}".replace(",", " ")
         return f"Renfort de {self.nb_bus} bus à {self.zone} {quand}"
 
 
@@ -74,6 +81,14 @@ def _etat(zone: str, vph: float, capacite: float, vitesse_ref: float, tf_ref: fl
 
 
 def run(scenario: Scenario) -> dict:
+    parts = {scenario.zone: 1.0}
+    if scenario.lieu:
+        f = data.lieu(scenario.lieu)
+        if f is None:
+            raise ValueError(f"Lieu inconnu : {scenario.lieu}.")
+        scenario.zone = f["properties"]["zone"]
+        # Un axe peut traverser plusieurs communes : la fermeture pèse sur chacune selon la longueur traversée
+        parts = {c: p for c, p in (f["properties"].get("parts") or {scenario.zone: 1.0}).items() if data.traffic(c) is not None} or {scenario.zone: 1.0}
     if data.traffic(scenario.zone) is None:
         raise ValueError(f"Zone inconnue : {scenario.zone}. Zones disponibles : {', '.join(data.zones())}.")
     trace = store.start_trace("simulation")
@@ -93,12 +108,13 @@ def run(scenario: Scenario) -> dict:
     z = scenario.zone
 
     if scenario.type == "fermeture":
-        cap[z] *= 1 - PART_AXE
-        voisins = data.neighbors(z)
-        reporte = vph[z] * PART_AXE * REPORT if voisins else 0
-        vph[z] -= reporte
-        for v in voisins:
-            vph[v] += reporte / len(voisins)
+        for c, part in parts.items():
+            cap[c] *= 1 - PART_AXE * part
+            voisins = [v for v in data.neighbors(c) if v not in parts] or [v for v in data.neighbors(c) if v != c]
+            reporte = vph[c] * PART_AXE * part * REPORT if voisins else 0
+            vph[c] -= reporte
+            for v in voisins:
+                vph[v] += reporte / len(voisins)
     elif scenario.type == "evenement":
         vph[z] += scenario.participants * PART_VOITURE / OCCUPATION / duree
     else:
@@ -163,7 +179,11 @@ def run(scenario: Scenario) -> dict:
              f"de ces déplacements. {data.origine_donnees()}."
              if reel else data.origine_donnees()),
             "Temps de parcours : fonction BPR (1 + 0,15 × charge⁴), standard en ingénierie du trafic.",
-            f"Fermeture : l'axe porte {round(PART_AXE * 100)} % de la capacité de la zone ; {round(REPORT * 100)} % de son trafic se reporte sur les zones voisines.",
+            f"Fermeture : l'axe porte {round(PART_AXE * 100)} % de la capacité de la zone ; {round(REPORT * 100)} % de son trafic se reporte sur les zones voisines."
+            + (f" L'axe traverse {', '.join(f'{c} ({round(p * 100)} %)' for c, p in parts.items())} : l'effet est réparti selon la longueur traversée."
+               if scenario.type == "fermeture" and len(parts) > 1 else ""),
+            *([f"Lieu : {scenario.nom_lieu()}, tracé OpenStreetMap (© contributeurs OSM, ODbL). Le calcul reste fait à l'échelle des communes."]
+              if scenario.lieu else []),
             f"Événement : {round(PART_VOITURE * 100)} % des participants viennent en voiture ({OCCUPATION} personnes par véhicule), arrivées réparties sur la durée.",
             f"Renfort : chaque bus transporte {PASSAGERS_BUS_HEURE} passagers par heure, dont {round(REPORT_MODAL * 100)} % auraient pris leur voiture.",
         ],
