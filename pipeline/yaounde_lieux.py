@@ -33,8 +33,47 @@ REQUETE = f"""[out:json][timeout:200];
  nwr["amenity"="marketplace"]["name"]({CADRE}););
 out geom;"""
 SERVEURS = ["https://overpass-api.de/api/interpreter", "https://overpass.kumi.systems/api/interpreter"]
-NB_AXES = 14
-NB_PAR_TYPE = 8
+# Sélection : lieux connus de tous à Yaoundé. Clé = nom affiché ; valeur = noms OpenStreetMap correspondants.
+AXES = {
+    "Boulevard du 20 Mai": ["Boulevard du 20 Mai 1972"],
+    "Boulevard de la Réunification": ["Boulevard de la Réunification"],
+    "Boulevard du Président Paul Biya": ["Boulevard du Président Paul Biya"],
+    "Boulevard Saint Jean Paul II": ["Boulevard Saint Jean Paul II"],
+    "Boulevard Rodolphe Manga Bell": ["Boulevard Rodolph Manga Bell", "Boulevard Rodolphe Manga Bell"],
+    "Boulevard de l'OCAM": ["Boulevard de l'OCAM"],
+    "Avenue Charles Atangana": ["Avenue Charles Atangana"],
+    "Avenue John Ngu Foncha": ["Avenue John Ngu Foncha"],
+    "Route de Douala": ["Route de Douala"],
+    "Ancienne route de Douala": ["Ancienne Route de Douala"],
+    "Route de Kribi": ["Route de Kribi", "Route Yaoundé-Kribi"],
+    "Route de Mbalmayo": ["Route de Mbalmayo", "Yaoundé-Mbalmayo"],
+    "Route d'Obala": ["Yaounde - Obala"],
+    "Route de Ngousso": ["Route de Ngousso"],
+    "Nouvelle route Bastos": ["Nouvelle Route Bastos"],
+    "Avenue de Biyem-Assi": ["Avenue de Biyeme Assi"],
+    "Rue de Kondengui": ["Rue de Kondengui"],
+}
+# Ponts : ouvrages repérés sur ces axes (on garde le plus long tronçon en pont de chaque axe)
+PONTS = {
+    "Pont de la route de Douala": "Route de Douala",
+    "Pont de l'ancienne route de Douala": "Ancienne Route de Douala",
+    "Pont de la route de Kribi": "Route de Kribi",
+    "Pont de Biyem-Assi": "Avenue de Biyeme Assi",
+    "Pont de Kondengui": "Rue de Kondengui",
+    "Pont de la nouvelle route Bastos": "Nouvelle Route Bastos",
+    "Pont de l'avenue Marc Vivien Foé": "Avenue Marc Vivien Foe",
+    "Pont de Mvolyé": "Avenue de Mvolye",
+}
+CARREFOURS = ["Place de l'Indépendance", "Place du 20 Mai", "Place Ahmadou Ahidjo", "Place John F Kennedy", "Rond-Point Bastos",
+              "Rond-Point de Nlongkak", "Carrefour Vogt", "Carrefour Trois Statues", "Carrefour de la Chapelle",
+              "Ekié Carrefour Six Morts", "Carrefour Messamendongo", "Tropicana Carrefour"]
+STADES = {"Stade Ahmadou Ahidjo (Mfandena)": "Stade Ahmadou Ahidjo", "Stade Paul Biya (Olembé)": "Stade Omnisport Paul Biya"}
+MARCHES = {"Marché Mokolo": ["Marché Mokolo"], "Marché Central": ["Marché Central", "Central Market"],
+           "Marché Mfoundi": ["Marché Mfoundi A"], "Marché Mvog-Mbi": ["Marché de Mvog Mbi"],
+           "Marché Mvog-Betsi": ["Marché Mvog-Betsi", "Marche Mvog betsi"], "Marché d'Essos": ["Marché d'Essos"],
+           "Marché d'Ekounou": ["Marché d'Ekounou"], "Marché de Melen": ["Marché De Melen"], "Marché Acacia": ["Marché Acacia"],
+           "Grand marché de Biyem-Assi": ["Grand Marché de Biyem-Assi"], "Marché de Nkolbisson": ["Marché De Nkolbisson"],
+           "Marché Obili": ["Marché Obili"]}
 
 
 def telecharger() -> dict:
@@ -76,12 +115,15 @@ def ident(texte: str) -> str:
 def construire(osm: dict) -> dict:
     geo = json.loads(COMMUNES.read_text(encoding="utf-8"))
     communes = [(f["properties"]["zone"], f["geometry"]["coordinates"][0]) for f in geo["features"]]
-    routes: dict[str, list] = defaultdict(list)
-    ponts, ronds, stades, marches = {}, {}, {}, {}
+    routes: dict[str, list] = defaultdict(list)  # nom OSM → tronçons
+    ponts: dict[str, list] = defaultdict(list)  # nom de l'axe OSM → tronçons en pont
+    points: dict[str, list] = defaultdict(list)  # nom OSM → centres (carrefours, stades, marchés)
 
     for e in osm["elements"]:
         t = e.get("tags", {})
         nom = t.get("name")
+        if not nom:
+            continue
         if e["type"] == "node":
             pts = [(e["lon"], e["lat"])]
         elif "geometry" in e:
@@ -94,17 +136,11 @@ def construire(osm: dict) -> dict:
         if not pts:
             continue
         centre = (sum(p[0] for p in pts) / len(pts), sum(p[1] for p in pts) / len(pts))
-        if t.get("leisure") == "stadium" and nom:
-            stades[nom] = centre
-        elif t.get("amenity") == "marketplace" and nom:
-            marches[nom] = centre
-        elif t.get("junction") == "roundabout" and nom:
-            ronds[nom] = centre
-        elif t.get("bridge") == "yes":
-            pont = nom if nom and "pont" in nom.lower() else (f"Pont, {t['name']}" if nom else None)
-            if pont:
-                ponts.setdefault(pont, []).append(pts)
-        elif nom:
+        if t.get("leisure") == "stadium" or t.get("amenity") == "marketplace" or t.get("junction") == "roundabout":
+            points[nom].append(centre)
+        if t.get("bridge") == "yes":
+            ponts[nom].append(pts)
+        elif "highway" in t and t.get("junction") != "roundabout":
             routes[nom].append(pts)
 
     lieux = []
@@ -112,6 +148,7 @@ def construire(osm: dict) -> dict:
     def ajouter(nom, type_, geometrie, parts):
         parts = {c: p for c, p in parts.items() if c}
         if not parts:
+            print(f"  ignoré (hors des communes) : {nom}")
             return
         total = sum(parts.values())
         parts = {c: round(p / total, 2) for c, p in sorted(parts.items(), key=lambda x: -x[1]) if p / total >= 0.05}
@@ -119,8 +156,7 @@ def construire(osm: dict) -> dict:
             "id": ident(f"{type_}-{nom}"), "nom": nom, "type": type_, "zone": next(iter(parts)), "parts": parts}})
 
     def ligne(morceaux):
-        coords = [[[round(x, 5), round(y, 5)] for x, y in m] for m in morceaux]
-        return {"type": "MultiLineString", "coordinates": coords}
+        return {"type": "MultiLineString", "coordinates": [[[round(x, 5), round(y, 5)] for x, y in m] for m in morceaux]}
 
     def parts_ligne(morceaux):
         parts = defaultdict(float)
@@ -129,14 +165,35 @@ def construire(osm: dict) -> dict:
                 parts[commune(((a[0] + b[0]) / 2, (a[1] + b[1]) / 2), communes)] += km(a, b)
         return parts
 
-    longueurs = {n: sum(km(a, b) for m in ms for a, b in zip(m, m[1:])) for n, ms in routes.items()}
-    for nom in sorted(longueurs, key=lambda n: -longueurs[n])[:NB_AXES]:
-        ajouter(nom, "route", ligne(routes[nom]), parts_ligne(routes[nom]))
-    for nom, ms in list(ponts.items())[:NB_PAR_TYPE]:
-        ajouter(nom, "pont", ligne(ms), parts_ligne(ms))
-    for type_, groupe in (("carrefour", ronds), ("stade", stades), ("marche", marches)):
-        for nom, c in list(groupe.items())[:NB_PAR_TYPE]:
-            ajouter(nom, type_, {"type": "Point", "coordinates": [round(c[0], 5), round(c[1], 5)]}, {commune(c, communes): 1.0})
+    def point(nom, type_, noms_osm):
+        centres = [c for n in noms_osm for c in points.get(n, [])]
+        if not centres:
+            print(f"  absent d'OpenStreetMap : {nom}")
+            return
+        c = centres[0]
+        ajouter(nom, type_, {"type": "Point", "coordinates": [round(c[0], 5), round(c[1], 5)]}, {commune(c, communes): 1.0})
+
+    for nom, noms_osm in AXES.items():
+        morceaux = [m for n in noms_osm for m in routes.get(n, [])]
+        if morceaux:
+            # On ne garde que les tronçons dans les communes (une route nationale sort de la ville)
+            dedans = [m for m in morceaux if any(commune(p, communes) for p in m)]
+            ajouter(nom, "route", ligne(dedans), parts_ligne(dedans))
+        else:
+            print(f"  absent d'OpenStreetMap : {nom}")
+    for nom, axe in PONTS.items():
+        morceaux = ponts.get(axe, [])
+        if not morceaux:
+            print(f"  absent d'OpenStreetMap : {nom}")
+            continue
+        plus_long = max(morceaux, key=lambda m: sum(km(a, b) for a, b in zip(m, m[1:])))
+        ajouter(nom, "pont", ligne([plus_long]), parts_ligne([plus_long]))
+    for nom in CARREFOURS:
+        point(nom, "carrefour", [nom])
+    for nom, osm_nom in STADES.items():
+        point(nom, "stade", [osm_nom])
+    for nom, noms_osm in MARCHES.items():
+        point(nom, "marche", noms_osm)
 
     return {"type": "FeatureCollection",
             "attribution": "© contributeurs OpenStreetMap, licence ODbL (openstreetmap.org/copyright)",
