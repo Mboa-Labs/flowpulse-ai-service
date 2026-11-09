@@ -35,6 +35,19 @@ Réponds uniquement en JSON avec les clés :
 "citations" : liste des numéros d'extraits utilisés (ex. [1, 3]).
 Si aucun extrait ne permet de conclure, réponds "NON_COUVERT"."""
 
+# Consigne entièrement en anglais pour l'interface anglaise : un petit modèle suit mieux la langue de la consigne
+PROMPT_EN = """You are the regulatory compliance agent of FlowPulse.
+Proposed decision: {decision}
+
+Excerpts of the texts in force (use ONLY these excerpts; they may be in French):
+{passages}
+
+Answer only in JSON with the keys:
+"verdict": one of {verdicts},
+"justification": at most 2 sentences, in English, citing the document and the article. This verdict applies to every decision of the same type: justify the type of measure, without naming a zone, a line, a place or a time,
+"citations": list of the excerpt numbers used (e.g. [1, 3]).
+If no excerpt allows a conclusion, answer "NON_COUVERT"."""
+
 
 @dataclass
 class PolicyResult:
@@ -108,7 +121,7 @@ def _verifier(decision: str, started: float) -> PolicyResult:
 
     listing = "\n".join(f"[{i + 1}] {p.titre} ({p.reference}) {p.article} : {p.texte[:LONGUEUR_EXTRAIT]}" for i, p in enumerate(passages))
     try:
-        raw = llm.get_llm(json_mode=True).invoke(PROMPT.format(decision=decision, passages=listing, verdicts=", ".join(VERDICTS), langue=langue.nom_langue())).content
+        raw = llm.get_llm(json_mode=True).invoke((PROMPT_EN if langue.actuelle() == "en" else PROMPT).format(decision=decision, passages=listing, verdicts=", ".join(VERDICTS), langue=langue.nom_langue())).content
         data = json.loads(raw)
         verdict = data.get("verdict") if data.get("verdict") in VERDICTS else "NON_COUVERT"
         used = [passages[i - 1] for i in data.get("citations", []) if isinstance(i, int) and 1 <= i <= len(passages)] or passages[:1]
