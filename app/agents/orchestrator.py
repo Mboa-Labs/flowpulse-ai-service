@@ -36,6 +36,7 @@ Rules:
 - Before proposing a reallocation, check the traffic, then the fleet status of the zone.
 - You can only PROPOSE a reallocation (tool propose_fleet_reallocation). The operator applies it.
 - For any regulatory question, use search_regulations and cite the text and the article (the texts are in French: quote their titles as they are).
+- The tool results and the legal texts are often in French: translate them, and write your whole answer in English. Never answer in French.
 - Always answer in English, briefly and in a structured way, with figures and their units."""
 
 

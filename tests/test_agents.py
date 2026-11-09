@@ -392,3 +392,16 @@ def test_resultats_des_outils_en_anglais():
         assert "Reserve buses" in tools.get_bus_fleet_status.invoke({"zone_name": "Grand Dakar"})
     finally:
         langue.LANGUE.reset(jeton)
+
+
+def test_extraits_reglementaires_annonces_en_anglais(monkeypatch):
+    from app import langue
+    from app.agents import tools
+    monkeypatch.setattr(kb, "search", lambda *a, **k: [passage()])
+    jeton = langue.LANGUE.set("en")
+    try:
+        out = tools.search_regulations.invoke({"question": "Who organises urban transport?"})
+    finally:
+        langue.LANGUE.reset(jeton)
+    assert out.startswith("Excerpts of the legal texts") and "Code général des CTD" in out
+    assert "Never answer in French" in orchestrator.SYSTEM_EN

@@ -104,7 +104,9 @@ def search_regulations(question: str) -> str:
         return tr("Aucun texte trouvé dans la base de connaissances.", "No text found in the knowledge base.")
     sources = [{"doc_id": p.doc_id, "titre": p.titre, "reference": p.reference, "article": p.article, "score": p.score} for p in passages]
     store.record("outil", "search_regulations", question, f"{len(passages)} passages", started, sources)
-    return "\n".join(f"- {p.titre} ({p.reference}) {p.article} : {p.texte[:400]}" for p in passages)
+    extraits = "\n".join(f"- {p.titre} ({p.reference}) {p.article} : {p.texte[:400]}" for p in passages)
+    # Les textes sont en français : en anglais, on rappelle au modèle de traduire au lieu de recopier
+    return tr(extraits, "Excerpts of the legal texts (in French; translate them, answer in English):\n" + extraits)
 
 
 TOOLS = [get_city_overview, get_traffic_data, get_bus_fleet_status, propose_fleet_reallocation, search_regulations]
