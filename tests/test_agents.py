@@ -318,3 +318,31 @@ def test_simulation_sur_un_lieu_reel(no_kb, monkeypatch):
     assert any(f"{a} (70 %)" in h for h in sim["hypotheses"])
     assert any("OpenStreetMap" in h for h in sim["hypotheses"])
     assert client.post("/ai/simulations", json={"type": "fermeture", "zone": a, "lieu": "inconnu"}).status_code == 422
+
+
+def test_vue_d_ensemble_classe_les_zones_de_la_plus_tendue_a_la_plus_calme():
+    from app.agents import tools
+    out = tools.get_city_overview.invoke({})
+    lignes = [l for l in out.splitlines() if l.startswith("- ")]
+    assert len(lignes) == len(data.zones())
+    valeurs = [int(l.split(" : ")[1].split("/")[0]) for l in lignes]
+    assert valeurs == sorted(valeurs, reverse=True)
+    assert lignes[0].startswith("- Grand Dakar")
+
+
+def test_renfort_a_zero_bus_remplace_par_le_besoin_calcule(no_kb):
+    reco = optimizer.propose("Grand Dakar", None, 0)
+    assert reco.nb_bus == 3
+
+
+def test_aucun_renfort_propose_sous_le_seuil(no_kb, monkeypatch):
+    zone = data.zones()[0]
+    monkeypatch.setattr(data, "traffic", lambda z: {"niveau_congestion": 50, "prevision_1h": 60})
+    with pytest.raises(ValueError, match="Aucune réaffectation"):
+        optimizer.propose(zone)
+    assert not store.RECOMMENDATIONS
+
+
+def test_justification_redigee_pour_le_type_de_decision():
+    # Le verdict est réutilisé pour toutes les zones : la justification ne doit nommer ni zone ni ligne
+    assert "sans nommer de zone, de ligne" in policy.PROMPT
