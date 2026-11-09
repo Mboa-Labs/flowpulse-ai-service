@@ -367,3 +367,17 @@ def test_langue_lue_dans_l_entete():
     r = client.post("/ai/simulations", json={"type": "renfort", "zone": "Grand Dakar", "nb_bus": 2}, headers={"Accept-Language": "en-GB,en;q=0.9"})
     assert r.status_code == 200 and r.json()["libelle"].startswith("Reinforcement of 2 buses")
     assert langue.depuis_entete("fr-FR") == "fr" and langue.depuis_entete(None) == "fr"
+
+
+def test_consignes_en_anglais_pour_l_interface_anglaise(monkeypatch):
+    from app import langue
+    monkeypatch.setattr(kb, "search", lambda *a, **k: [passage()])
+    fake = FakeLLM([AIMessage(content=json.dumps({"verdict": "CONFORME", "justification": "Article 12.", "citations": [1]}))])
+    monkeypatch.setattr(llm, "get_llm", lambda json_mode=False: fake)
+    jeton = langue.LANGUE.set("en")
+    try:
+        policy.check("Move 2 buses", "type_test")
+    finally:
+        langue.LANGUE.reset(jeton)
+    assert fake.received[0].startswith("You are the regulatory compliance agent")
+    assert "Always answer in English" in orchestrator.SYSTEM_EN

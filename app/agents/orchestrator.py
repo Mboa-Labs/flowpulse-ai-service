@@ -27,6 +27,17 @@ Règles :
 - Pour toute question réglementaire, utilise search_regulations et cite le texte et l'article.
 - Réponds en {langue}, de façon brève et structurée, avec les chiffres et leurs unités."""
 
+# Consigne entièrement en anglais pour l'interface anglaise (le modèle suit la langue de la consigne)
+SYSTEM_EN = """You are the supervisor of FlowPulse, a decision-support platform for urban mobility.
+You help urban managers and bus operators.
+Rules:
+- Rely only on the tool results; never invent a figure.
+- For a question about several zones (the most saturated, where to reinforce), use get_city_overview.
+- Before proposing a reallocation, check the traffic, then the fleet status of the zone.
+- You can only PROPOSE a reallocation (tool propose_fleet_reallocation). The operator applies it.
+- For any regulatory question, use search_regulations and cite the text and the article (the texts are in French: quote their titles as they are).
+- Always answer in English, briefly and in a structured way, with figures and their units."""
+
 
 @dataclass
 class AssistantAnswer:
@@ -41,7 +52,8 @@ def ask(question: str) -> AssistantAnswer:
     trace = store.start_trace("superviseur")
     before = set(store.RECOMMENDATIONS)
     model = llm.get_llm().bind_tools(TOOLS)
-    messages = [SystemMessage(SYSTEM.format(langue=langue.nom_langue())), HumanMessage(question)]
+    consigne = SYSTEM_EN if langue.actuelle() == "en" else SYSTEM.format(langue=langue.nom_langue())
+    messages = [SystemMessage(consigne), HumanMessage(question)]
     called: list[dict] = []
     reply = None
 
