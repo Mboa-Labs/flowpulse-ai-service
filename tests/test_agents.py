@@ -346,3 +346,24 @@ def test_aucun_renfort_propose_sous_le_seuil(no_kb, monkeypatch):
 def test_justification_redigee_pour_le_type_de_decision():
     # Le verdict est réutilisé pour toutes les zones : la justification ne doit nommer ni zone ni ligne
     assert "sans nommer de zone, de ligne" in policy.PROMPT
+
+
+def test_contenus_en_anglais_quand_la_requete_le_demande(no_kb):
+    from app import langue
+    jeton = langue.LANGUE.set("en")
+    try:
+        plan = watcher.contingence("Grand Dakar", "SATURE", 2)
+        assert plan[0].startswith("Notify the operator") and any("reserve buses" in p for p in plan)
+        reco = optimizer.propose("Grand Dakar")
+        assert reco.description.startswith("Move ")
+    finally:
+        langue.LANGUE.reset(jeton)
+    assert watcher.contingence("Grand Dakar", "SATURE", 2)[0].startswith("Prévenir")
+
+
+def test_langue_lue_dans_l_entete():
+    from app import langue
+    client = TestClient(app)
+    r = client.post("/ai/simulations", json={"type": "renfort", "zone": "Grand Dakar", "nb_bus": 2}, headers={"Accept-Language": "en-GB,en;q=0.9"})
+    assert r.status_code == 200 and r.json()["libelle"].startswith("Reinforcement of 2 buses")
+    assert langue.depuis_entete("fr-FR") == "fr" and langue.depuis_entete(None) == "fr"

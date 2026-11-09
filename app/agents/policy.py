@@ -14,6 +14,7 @@ from typing import Optional
 
 from app import kb
 from app.agents import llm, store
+from app import langue
 
 VERDICTS = ("CONFORME", "CONFORME_SOUS_RESERVE", "NON_CONFORME", "NON_COUVERT")
 MIN_SCORE = 0.35  # en dessous, un passage n'est pas considéré comme pertinent
@@ -30,7 +31,7 @@ Extraits des textes en vigueur (n'utilise QUE ces extraits) :
 
 Réponds uniquement en JSON avec les clés :
 "verdict" : l'une de {verdicts},
-"justification" : 2 phrases maximum, en français, qui citent le document et l'article. Ce verdict vaut pour toutes les décisions du même type : justifie le type de mesure, sans nommer de zone, de ligne, de lieu ni d'horaire,
+"justification" : 2 phrases maximum, en {langue}, qui citent le document et l'article. Ce verdict vaut pour toutes les décisions du même type : justifie le type de mesure, sans nommer de zone, de ligne, de lieu ni d'horaire,
 "citations" : liste des numéros d'extraits utilisés (ex. [1, 3]).
 Si aucun extrait ne permet de conclure, réponds "NON_COUVERT"."""
 
@@ -68,6 +69,7 @@ def check(decision: str, type_decision: Optional[str] = None) -> PolicyResult:
     """
     started = time.perf_counter()
     if type_decision:
+        type_decision = f"{type_decision}:{langue.actuelle()}"  # un verdict par langue
         cache = store.POLICY_CACHE.get(type_decision)
         if cache and time.time() - cache["date"] < DUREE_CACHE:
             result = PolicyResult(cache["verdict"], cache["justification"], cache["citations"])
@@ -92,7 +94,8 @@ def _verifier(decision: str, started: float) -> PolicyResult:
     if not passages:
         result = PolicyResult(
             "NON_COUVERT",
-            "Aucun texte de la base de connaissances ne couvre cette décision : validation humaine obligatoire.",
+            langue.tr("Aucun texte de la base de connaissances ne couvre cette décision : validation humaine obligatoire.",
+                      "No text in the knowledge base covers this decision: human approval required."),
             [],
         )
         trace = store.current_trace()
@@ -105,7 +108,7 @@ def _verifier(decision: str, started: float) -> PolicyResult:
 
     listing = "\n".join(f"[{i + 1}] {p.titre} ({p.reference}) {p.article} : {p.texte[:LONGUEUR_EXTRAIT]}" for i, p in enumerate(passages))
     try:
-        raw = llm.get_llm(json_mode=True).invoke(PROMPT.format(decision=decision, passages=listing, verdicts=", ".join(VERDICTS))).content
+        raw = llm.get_llm(json_mode=True).invoke(PROMPT.format(decision=decision, passages=listing, verdicts=", ".join(VERDICTS), langue=langue.nom_langue())).content
         data = json.loads(raw)
         verdict = data.get("verdict") if data.get("verdict") in VERDICTS else "NON_COUVERT"
         used = [passages[i - 1] for i in data.get("citations", []) if isinstance(i, int) and 1 <= i <= len(passages)] or passages[:1]

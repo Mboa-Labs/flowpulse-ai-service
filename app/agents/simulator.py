@@ -14,6 +14,7 @@ from dataclasses import asdict, dataclass
 from typing import Literal, Optional
 
 from app.agents import data, optimizer, policy, store, watcher
+from app.langue import tr
 
 TypeScenario = Literal["fermeture", "evenement", "renfort"]
 
@@ -48,14 +49,17 @@ class Scenario:
         return max(0.5, ((h2 * 60 + m2) - (h1 * 60 + m1)) / 60)
 
     def libelle(self) -> str:
-        quand = f"de {self.debut} à {self.fin}"
+        quand = tr(f"de {self.debut} à {self.fin}", f"from {self.debut} to {self.fin}")
         nom = self.nom_lieu()
         if self.type == "fermeture":
-            return f"Fermeture temporaire : {nom} ({self.zone}) {quand}" if nom else f"Fermeture temporaire d'un axe principal à {self.zone} {quand}"
+            if nom:
+                return tr(f"Fermeture temporaire : {nom} ({self.zone}) {quand}", f"Temporary closure: {nom} ({self.zone}) {quand}")
+            return tr(f"Fermeture temporaire d'un axe principal à {self.zone} {quand}", f"Temporary closure of a main road in {self.zone} {quand}")
         if self.type == "evenement":
             ou = f"{nom} ({self.zone})" if nom else self.zone
-            return f"Événement de {self.participants:,} participants à {ou} {quand}".replace(",", " ")
-        return f"Renfort de {self.nb_bus} bus à {self.zone} {quand}"
+            return tr(f"Événement de {self.participants:,} participants à {ou} {quand}".replace(",", " "),
+                      f"Event with {self.participants:,} participants at {ou} {quand}")
+        return tr(f"Renfort de {self.nb_bus} bus à {self.zone} {quand}", f"Reinforcement of {self.nb_bus} buses in {self.zone} {quand}")
 
 
 def temps_parcours(congestion: float) -> float:
@@ -155,8 +159,10 @@ def run(scenario: Scenario) -> dict:
             continue
         nb = optimizer.buses_needed(etat["niveau_congestion"], flotte["bus_en_reserve"])
         if nb:
-            a_verifier.append((f"Renfort de {nb} bus de réserve sur la {flotte['lignes_actives'][0]} à {etat['zone']} "
-                               f"de {scenario.debut} à {scenario.fin}", "reaffectation_bus_reserve"))
+            a_verifier.append((tr(f"Renfort de {nb} bus de réserve sur la {flotte['lignes_actives'][0]} à {etat['zone']} "
+                                  f"de {scenario.debut} à {scenario.fin}",
+                                  f"Reinforcement of {nb} reserve buses on {flotte['lignes_actives'][0]} in {etat['zone']} "
+                                  f"from {scenario.debut} to {scenario.fin}"), "reaffectation_bus_reserve"))
     mesures = []
     for decision, type_decision in a_verifier:
         verdict = policy.check(decision, type_decision)
@@ -174,18 +180,27 @@ def run(scenario: Scenario) -> dict:
         "indicateurs": indicateurs,
         "mesures": mesures,
         "hypotheses": [
-            (f"Point de départ : l'indice de tension de chaque zone à l'instant rejoué. Demande : les déplacements des "
-             f"profils de mobilité, dont {round(PART_VOITURE * 100)} % en voiture. Zones voisines : principales destinations "
-             f"de ces déplacements. {data.origine_donnees()}."
+            (tr(f"Point de départ : l'indice de tension de chaque zone à l'instant rejoué. Demande : les déplacements des "
+                f"profils de mobilité, dont {round(PART_VOITURE * 100)} % en voiture. Zones voisines : principales destinations "
+                f"de ces déplacements. {data.origine_donnees()}.",
+                f"Starting point: each zone's tension index at the replayed time. Demand: trips from the mobility profiles, "
+                f"{round(PART_VOITURE * 100)} % of them by car. Neighbouring zones: main destinations of these trips. "
+                f"Mobility profiles from Dakar (D4D-Senegal, 2013) transposed onto the 7 communes of Yaoundé.")
              if reel else data.origine_donnees()),
-            "Temps de parcours : fonction BPR (1 + 0,15 × charge⁴), standard en ingénierie du trafic.",
-            f"Fermeture : l'axe porte {round(PART_AXE * 100)} % de la capacité de la zone ; {round(REPORT * 100)} % de son trafic se reporte sur les zones voisines."
-            + (f" L'axe traverse {', '.join(f'{c} ({round(p * 100)} %)' for c, p in parts.items())} : l'effet est réparti selon la longueur traversée."
+            tr("Temps de parcours : fonction BPR (1 + 0,15 × charge⁴), standard en ingénierie du trafic.",
+               "Travel time: BPR function (1 + 0.15 × load⁴), a standard in traffic engineering."),
+            tr(f"Fermeture : l'axe porte {round(PART_AXE * 100)} % de la capacité de la zone ; {round(REPORT * 100)} % de son trafic se reporte sur les zones voisines.",
+               f"Closure: the road carries {round(PART_AXE * 100)} % of the zone's capacity; {round(REPORT * 100)} % of its traffic shifts to neighbouring zones.")
+            + (tr(f" L'axe traverse {', '.join(f'{c} ({round(p * 100)} %)' for c, p in parts.items())} : l'effet est réparti selon la longueur traversée.",
+                  f" The road crosses {', '.join(f'{c} ({round(p * 100)} %)' for c, p in parts.items())}: the effect is shared by the length crossed.")
                if scenario.type == "fermeture" and len(parts) > 1 else ""),
-            *([f"Lieu : {scenario.nom_lieu()}, tracé OpenStreetMap (© contributeurs OSM, ODbL). Le calcul reste fait à l'échelle des communes."]
+            *([tr(f"Lieu : {scenario.nom_lieu()}, tracé OpenStreetMap (© contributeurs OSM, ODbL). Le calcul reste fait à l'échelle des communes.",
+                  f"Place: {scenario.nom_lieu()}, OpenStreetMap trace (© OSM contributors, ODbL). The computation stays at commune level.")]
               if scenario.lieu else []),
-            f"Événement : {round(PART_VOITURE * 100)} % des participants viennent en voiture ({OCCUPATION} personnes par véhicule), arrivées réparties sur la durée.",
-            f"Renfort : chaque bus transporte {PASSAGERS_BUS_HEURE} passagers par heure, dont {round(REPORT_MODAL * 100)} % auraient pris leur voiture.",
+            tr(f"Événement : {round(PART_VOITURE * 100)} % des participants viennent en voiture ({OCCUPATION} personnes par véhicule), arrivées réparties sur la durée.",
+               f"Event: {round(PART_VOITURE * 100)} % of participants come by car ({OCCUPATION} people per vehicle), arrivals spread over the duration."),
+            tr(f"Renfort : chaque bus transporte {PASSAGERS_BUS_HEURE} passagers par heure, dont {round(REPORT_MODAL * 100)} % auraient pris leur voiture.",
+               f"Reinforcement: each bus carries {PASSAGERS_BUS_HEURE} passengers per hour, {round(REPORT_MODAL * 100)} % of whom would otherwise drive."),
         ],
         "trace_id": trace.id,
         "date": time.time(),

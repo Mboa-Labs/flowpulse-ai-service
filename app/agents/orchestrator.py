@@ -13,6 +13,7 @@ from langchain_core.messages import HumanMessage, SystemMessage, ToolMessage
 
 from app.agents import llm, store
 from app.agents.tools import TOOL_MAP, TOOLS
+from app import langue
 
 MAX_STEPS = 6
 
@@ -24,7 +25,7 @@ Règles :
 - Avant de proposer une réaffectation, consulte le trafic puis l'état de la flotte de la zone.
 - Tu ne peux que PROPOSER une réaffectation (outil propose_fleet_reallocation). C'est l'opérateur qui l'applique.
 - Pour toute question réglementaire, utilise search_regulations et cite le texte et l'article.
-- Réponds en français, de façon brève et structurée, avec les chiffres et leurs unités."""
+- Réponds en {langue}, de façon brève et structurée, avec les chiffres et leurs unités."""
 
 
 @dataclass
@@ -40,7 +41,7 @@ def ask(question: str) -> AssistantAnswer:
     trace = store.start_trace("superviseur")
     before = set(store.RECOMMENDATIONS)
     model = llm.get_llm().bind_tools(TOOLS)
-    messages = [SystemMessage(SYSTEM), HumanMessage(question)]
+    messages = [SystemMessage(SYSTEM.format(langue=langue.nom_langue())), HumanMessage(question)]
     called: list[dict] = []
     reply = None
 
@@ -59,7 +60,8 @@ def ask(question: str) -> AssistantAnswer:
     else:
         reply = None
 
-    text = reply.content if reply is not None and reply.content else "Je n'ai pas pu conclure en un nombre raisonnable d'étapes. Reformulez la demande ou précisez la zone."
+    text = reply.content if reply is not None and reply.content else langue.tr("Je n'ai pas pu conclure en un nombre raisonnable d'étapes. Reformulez la demande ou précisez la zone.",
+                     "I could not reach a conclusion in a reasonable number of steps. Rephrase the request or specify the zone.")
     citations = [s for step in trace.etapes for s in step.sources]
     new_recos = [rid for rid in store.RECOMMENDATIONS if rid not in before]
     return AssistantAnswer(text, trace.id, called, new_recos, citations)

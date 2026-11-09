@@ -12,6 +12,7 @@ import time
 from typing import Optional
 
 from app.agents import data, policy, store
+from app.langue import tr
 
 SEUIL_CIBLE = 70  # niveau de congestion visé après renfort (%)
 
@@ -35,12 +36,15 @@ def propose(zone: str, ligne: Optional[str] = None, nb_bus: Optional[int] = None
     # Un nombre absent ou nul (fréquent quand le modèle de langage remplit l'outil) vaut « le besoin calculé »
     nb = besoin if not nb_bus or int(nb_bus) <= 0 else min(int(nb_bus), flotte["bus_en_reserve"])
     if nb == 0:
-        raison = ("aucun bus en réserve" if not flotte["bus_en_reserve"]
-                  else f"tension attendue {tension:.0f}/100, sous le seuil de renfort ({SEUIL_CIBLE})")
-        raise ValueError(f"Aucune réaffectation proposée à {zone} : {raison}.")
-    description = (
+        raison = (tr("aucun bus en réserve", "no reserve bus") if not flotte["bus_en_reserve"]
+                  else tr(f"tension attendue {tension:.0f}/100, sous le seuil de renfort ({SEUIL_CIBLE})",
+                          f"expected tension {tension:.0f}/100, below the reinforcement threshold ({SEUIL_CIBLE})"))
+        raise ValueError(tr(f"Aucune réaffectation proposée à {zone} : {raison}.", f"No reallocation proposed in {zone}: {raison}."))
+    description = tr(
         f"Déplacer {nb} bus de la réserve vers la {ligne} à {zone} "
-        f"(congestion {trafic['niveau_congestion']} %, {flotte['bus_en_reserve']} bus en réserve)."
+        f"(congestion {trafic['niveau_congestion']} %, {flotte['bus_en_reserve']} bus en réserve).",
+        f"Move {nb} reserve buses to {ligne} in {zone} "
+        f"(congestion {trafic['niveau_congestion']} %, {flotte['bus_en_reserve']} buses in reserve).",
     )
     store.record("optimizer", "calcul_plan", {"zone": zone, "ligne": ligne, "demande": nb_bus}, description, started)
 

@@ -12,6 +12,7 @@ from dataclasses import asdict, dataclass, field
 from typing import Optional
 
 from app.agents import data, optimizer, store
+from app.langue import tr
 
 SEUIL_DENSE = 75
 SEUIL_SATURE = 85
@@ -37,17 +38,23 @@ class Alert:
 def contingence(zone: str, niveau: str, nb_bus: int, prevue: bool = False) -> list[str]:
     """Plan de contingence type : actions déterministes, à adapter par le gestionnaire."""
     flotte = data.fleet(zone) or {}
-    lignes = ", ".join(flotte.get("lignes_actives", [])) or "les lignes de la zone"
-    plan = [f"Prévenir l'exploitant des lignes {lignes} et la régulation de la circulation."]
+    lignes = ", ".join(flotte.get("lignes_actives", [])) or tr("les lignes de la zone", "the zone's lines")
+    plan = [tr(f"Prévenir l'exploitant des lignes {lignes} et la régulation de la circulation.",
+               f"Notify the operator of {lignes} and traffic control.")]
     if prevue:
-        plan.insert(0, "Saturation prévue dans l'heure par le modèle : agir avant le pic.")
+        plan.insert(0, tr("Saturation prévue dans l'heure par le modèle : agir avant le pic.",
+                          "Saturation expected within the hour by the model: act before the peak."))
     if nb_bus:
-        plan.append(f"Engager {nb_bus} bus de réserve (recommandation à valider dans Flotte).")
+        plan.append(tr(f"Engager {nb_bus} bus de réserve (recommandation à valider dans Flotte).",
+                       f"Deploy {nb_bus} reserve buses (recommendation to approve in Fleet)."))
     if niveau == "SATURE":
-        plan.append("Informer les usagers aux arrêts de la zone : attente prolongée, itinéraires de délestage.")
-        plan.append("Demander un agent de régulation aux carrefours principaux pendant le pic.")
+        plan.append(tr("Informer les usagers aux arrêts de la zone : attente prolongée, itinéraires de délestage.",
+                       "Inform passengers at the zone's stops: longer waits, alternative routes."))
+        plan.append(tr("Demander un agent de régulation aux carrefours principaux pendant le pic.",
+                       "Request a traffic officer at the main junctions during the peak."))
     else:
-        plan.append("Surveiller l'évolution : nouvelle analyse dans 15 minutes.")
+        plan.append(tr("Surveiller l'évolution : nouvelle analyse dans 15 minutes.",
+                       "Monitor the trend: new analysis in 15 minutes."))
     return plan
 
 
