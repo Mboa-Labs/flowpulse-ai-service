@@ -381,3 +381,14 @@ def test_consignes_en_anglais_pour_l_interface_anglaise(monkeypatch):
         langue.LANGUE.reset(jeton)
     assert fake.received[0].startswith("You are the regulatory compliance agent")
     assert "Always answer in English" in orchestrator.SYSTEM_EN
+
+
+def test_resultats_des_outils_en_anglais():
+    from app import langue
+    from app.agents import tools
+    jeton = langue.LANGUE.set("en")
+    try:
+        assert tools.get_city_overview.invoke({}).startswith("Zones from most to least under pressure")
+        assert "Reserve buses" in tools.get_bus_fleet_status.invoke({"zone_name": "Grand Dakar"})
+    finally:
+        langue.LANGUE.reset(jeton)

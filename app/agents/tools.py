@@ -12,6 +12,7 @@ from langchain_core.tools import tool
 
 from app import kb
 from app.agents import data, optimizer, store
+from app.langue import tr
 
 
 @tool
@@ -20,14 +21,19 @@ def get_traffic_data(zone_name: str) -> str:
     started = time.perf_counter()
     t = data.traffic(zone_name)
     if t is None:
-        out = f"Aucune donnée pour la zone {zone_name}. Zones disponibles : {', '.join(data.zones())}."
+        out = tr(f"Aucune donnée pour la zone {zone_name}. Zones disponibles : {', '.join(data.zones())}.",
+                 f"No data for zone {zone_name}. Available zones: {', '.join(data.zones())}.")
     elif t.get("source") == "d4d":
-        prev = (f" | Prévu dans 1 h: {t['prevision_1h']:.0f}/100, dans 2 h: {t['prevision_2h']:.0f}/100"
+        prev = (tr(f" | Prévu dans 1 h: {t['prevision_1h']:.0f}/100, dans 2 h: {t['prevision_2h']:.0f}/100",
+                   f" | Forecast in 1 h: {t['prevision_1h']:.0f}/100, in 2 h: {t['prevision_2h']:.0f}/100")
                 if t.get("prevision_1h") is not None and t.get("prevision_2h") is not None else "")
-        out = (f"Zone: {zone_name} | Heure: {t['heure']} | Congestion: {t['niveau_congestion']}% (indice de tension)"
-               f"{prev} | Appels: {t['appels']}/h | Déplacements (échantillon): {t['arrivees']} arrivées, {t['departs']} départs")
+        out = tr(f"Zone: {zone_name} | Heure: {t['heure']} | Congestion: {t['niveau_congestion']}% (indice de tension)"
+                 f"{prev} | Appels: {t['appels']}/h | Déplacements (échantillon): {t['arrivees']} arrivées, {t['departs']} départs",
+                 f"Zone: {zone_name} | Time: {t['heure']} | Congestion: {t['niveau_congestion']}% (tension index)"
+                 f"{prev} | Calls: {t['appels']}/h | Trips (sample): {t['arrivees']} arrivals, {t['departs']} departures")
     else:
-        out = f"Zone: {zone_name} | Vitesse: {t['vitesse_moyenne']} km/h | Congestion: {t['niveau_congestion']}% | Flux: {t['vehicules_par_heure']} véh/h"
+        out = tr(f"Zone: {zone_name} | Vitesse: {t['vitesse_moyenne']} km/h | Congestion: {t['niveau_congestion']}% | Flux: {t['vehicules_par_heure']} véh/h",
+                 f"Zone: {zone_name} | Speed: {t['vitesse_moyenne']} km/h | Congestion: {t['niveau_congestion']}% | Flow: {t['vehicules_par_heure']} veh/h")
     store.record("outil", "get_traffic_data", zone_name, out, started)
     return out
 
@@ -43,10 +49,12 @@ def get_city_overview() -> str:
         if t is None:
             continue
         prev = t.get("prevision_1h")
-        lignes.append((t["niveau_congestion"], f"{z} : {t['niveau_congestion']}/100" + (f", prévu {prev:.0f}/100 dans 1 h" if prev is not None else "")))
+        lignes.append((t["niveau_congestion"], f"{z} : {t['niveau_congestion']}/100"
+                       + (tr(f", prévu {prev:.0f}/100 dans 1 h", f", forecast {prev:.0f}/100 in 1 h") if prev is not None else "")))
     lignes.sort(key=lambda x: -x[0])
-    out = ("Zones de la plus tendue à la plus calme (dense dès 75, saturé dès 85) :\n" + "\n".join(f"- {l}" for _, l in lignes)
-           if lignes else "Aucune donnée de zone disponible.")
+    out = (tr("Zones de la plus tendue à la plus calme (dense dès 75, saturé dès 85) :\n",
+              "Zones from most to least under pressure (dense from 75, saturated from 85):\n") + "\n".join(f"- {l}" for _, l in lignes)
+           if lignes else tr("Aucune donnée de zone disponible.", "No zone data available."))
     store.record("outil", "get_city_overview", "toutes les zones", out, started)
     return out
 
@@ -57,9 +65,10 @@ def get_bus_fleet_status(zone_name: str) -> str:
     started = time.perf_counter()
     f = data.fleet(zone_name)
     out = (
-        f"Aucune information de flotte pour la zone {zone_name}."
+        tr(f"Aucune information de flotte pour la zone {zone_name}.", f"No fleet information for zone {zone_name}.")
         if f is None
-        else f"Zone: {zone_name} | Lignes: {', '.join(f['lignes_actives'])} | Bus en réserve: {f['bus_en_reserve']} | Capacité: {f['capacite']} places"
+        else tr(f"Zone: {zone_name} | Lignes: {', '.join(f['lignes_actives'])} | Bus en réserve: {f['bus_en_reserve']} | Capacité: {f['capacite']} places",
+                f"Zone: {zone_name} | Lines: {', '.join(f['lignes_actives'])} | Reserve buses: {f['bus_en_reserve']} | Capacity: {f['capacite']} seats")
     )
     store.record("outil", "get_bus_fleet_status", zone_name, out, started)
     return out
@@ -73,10 +82,12 @@ def propose_fleet_reallocation(zone_name: str, target_line: str, num_bus_to_add:
         reco = optimizer.propose(zone_name, target_line, num_bus_to_add)
     except ValueError as e:
         return str(e)
-    sources = "; ".join(f"{c['reference'] or c['titre']} {c['article']}".strip() for c in reco.citations) or "aucun texte applicable"
+    sources = "; ".join(f"{c['reference'] or c['titre']} {c['article']}".strip() for c in reco.citations) or tr("aucun texte applicable", "no applicable text")
     return (
-        f"Recommandation {reco.id} créée (statut {reco.statut}, en attente de validation par l'opérateur) : "
-        f"{reco.description} Conformité : {reco.conformite}. {reco.justification} Sources : {sources}."
+        tr(f"Recommandation {reco.id} créée (statut {reco.statut}, en attente de validation par l'opérateur) : "
+           f"{reco.description} Conformité : {reco.conformite}. {reco.justification} Sources : {sources}.",
+           f"Recommendation {reco.id} created (status {reco.statut}, awaiting the operator's approval): "
+           f"{reco.description} Compliance: {reco.conformite}. {reco.justification} Sources: {sources}.")
     )
 
 
@@ -90,7 +101,7 @@ def search_regulations(question: str) -> str:
         passages = []
         store.record("outil", "search_regulations", question, f"indisponible : {e}", started)
     if not passages:
-        return "Aucun texte trouvé dans la base de connaissances."
+        return tr("Aucun texte trouvé dans la base de connaissances.", "No text found in the knowledge base.")
     sources = [{"doc_id": p.doc_id, "titre": p.titre, "reference": p.reference, "article": p.article, "score": p.score} for p in passages]
     store.record("outil", "search_regulations", question, f"{len(passages)} passages", started, sources)
     return "\n".join(f"- {p.titre} ({p.reference}) {p.article} : {p.texte[:400]}" for p in passages)
