@@ -16,7 +16,9 @@ Aucune donnée ne quitte le serveur : le modèle de langage tourne en local via 
 
 Règle commune : **aucun agent n'applique de réaffectation**. Les agents créent des recommandations au statut `PROPOSEE` ; seule la décision humaine (`/ai/recommendations/{id}/decision`) les applique. Chaque étape est tracée (agent, action, entrées, sorties, durée, sources).
 
-Les données de trafic et de flotte sont pour l'instant des données de démonstration (`app/agents/data.py`, zones de Dakar) ; le pipeline du dataset les remplacera.
+Outils du superviseur (`app/agents/tools.py`) : vue d'ensemble de la ville (zones classées par tension), trafic d'une zone, état de la flotte, recherche dans les textes, proposition de réaffectation (jamais appliquée par l'agent).
+
+Les données de trafic viennent du pipeline D4D-Sénégal (`pipeline/`, profils transposés sur les 7 communes de Yaoundé) ; sans ses sorties, le service se rabat sur des données de démonstration (`app/agents/data.py`). La flotte, les lignes et les arrêts sont des données de démonstration.
 
 ## Routes
 
