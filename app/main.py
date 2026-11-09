@@ -16,6 +16,7 @@ from starlette.concurrency import run_in_threadpool
 from app import kb, persistence
 from app.agents import data, orchestrator, simulator, store, watcher
 from app.config import settings
+from app import langue
 
 
 @asynccontextmanager
@@ -31,7 +32,8 @@ app = FastAPI(title="FlowPulse AI service", version="0.1.0", lifespan=lifespan)
 
 @app.middleware("http")
 async def save_changes(request: Request, call_next):
-    """Après chaque requête, enregistre ce que les agents ont créé ou modifié."""
+    """Langue de la requête pour les contenus des agents ; après la requête, enregistre ce que les agents ont créé ou modifié."""
+    langue.LANGUE.set(langue.depuis_entete(request.headers.get("accept-language")))
     response = await call_next(request)
     await run_in_threadpool(persistence.flush)
     return response
