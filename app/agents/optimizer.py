@@ -32,7 +32,12 @@ def propose(zone: str, ligne: Optional[str] = None, nb_bus: Optional[int] = None
     # Le besoin se calcule sur la tension attendue : la plus forte entre maintenant et la prévision à 1 h
     tension = max(trafic["niveau_congestion"], trafic.get("prevision_1h") or 0)
     besoin = buses_needed(tension, flotte["bus_en_reserve"])
-    nb = besoin if nb_bus is None else max(0, min(int(nb_bus), flotte["bus_en_reserve"]))
+    # Un nombre absent ou nul (fréquent quand le modèle de langage remplit l'outil) vaut « le besoin calculé »
+    nb = besoin if not nb_bus or int(nb_bus) <= 0 else min(int(nb_bus), flotte["bus_en_reserve"])
+    if nb == 0:
+        raison = ("aucun bus en réserve" if not flotte["bus_en_reserve"]
+                  else f"tension attendue {tension:.0f}/100, sous le seuil de renfort ({SEUIL_CIBLE})")
+        raise ValueError(f"Aucune réaffectation proposée à {zone} : {raison}.")
     description = (
         f"Déplacer {nb} bus de la réserve vers la {ligne} à {zone} "
         f"(congestion {trafic['niveau_congestion']} %, {flotte['bus_en_reserve']} bus en réserve)."

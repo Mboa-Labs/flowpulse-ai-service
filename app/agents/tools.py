@@ -33,6 +33,25 @@ def get_traffic_data(zone_name: str) -> str:
 
 
 @tool
+def get_city_overview() -> str:
+    """Vue d'ensemble de la ville : toutes les zones classées de la plus tendue à la plus calme, avec leur prévision à 1 h.
+    À utiliser pour « quelle zone est la plus saturée », « où faut-il renforcer » ou toute question sur plusieurs zones."""
+    started = time.perf_counter()
+    lignes = []
+    for z in data.zones():
+        t = data.traffic(z)
+        if t is None:
+            continue
+        prev = t.get("prevision_1h")
+        lignes.append((t["niveau_congestion"], f"{z} : {t['niveau_congestion']}/100" + (f", prévu {prev:.0f}/100 dans 1 h" if prev is not None else "")))
+    lignes.sort(key=lambda x: -x[0])
+    out = ("Zones de la plus tendue à la plus calme (dense dès 75, saturé dès 85) :\n" + "\n".join(f"- {l}" for _, l in lignes)
+           if lignes else "Aucune donnée de zone disponible.")
+    store.record("outil", "get_city_overview", "toutes les zones", out, started)
+    return out
+
+
+@tool
 def get_bus_fleet_status(zone_name: str) -> str:
     """Récupère l'état des bus disponibles en réserve et les lignes actives pour une zone."""
     started = time.perf_counter()
@@ -77,5 +96,5 @@ def search_regulations(question: str) -> str:
     return "\n".join(f"- {p.titre} ({p.reference}) {p.article} : {p.texte[:400]}" for p in passages)
 
 
-TOOLS = [get_traffic_data, get_bus_fleet_status, propose_fleet_reallocation, search_regulations]
+TOOLS = [get_city_overview, get_traffic_data, get_bus_fleet_status, propose_fleet_reallocation, search_regulations]
 TOOL_MAP = {t.name: t for t in TOOLS}

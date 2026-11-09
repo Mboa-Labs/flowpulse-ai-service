@@ -30,7 +30,7 @@ Extraits des textes en vigueur (n'utilise QUE ces extraits) :
 
 Réponds uniquement en JSON avec les clés :
 "verdict" : l'une de {verdicts},
-"justification" : 2 phrases maximum, en français, qui citent le document et l'article,
+"justification" : 2 phrases maximum, en français, qui citent le document et l'article. Ce verdict vaut pour toutes les décisions du même type : justifie le type de mesure, sans nommer de zone, de ligne, de lieu ni d'horaire,
 "citations" : liste des numéros d'extraits utilisés (ex. [1, 3]).
 Si aucun extrait ne permet de conclure, réponds "NON_COUVERT"."""
 
