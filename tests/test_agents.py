@@ -405,3 +405,18 @@ def test_extraits_reglementaires_annonces_en_anglais(monkeypatch):
         langue.LANGUE.reset(jeton)
     assert out.startswith("Excerpts of the legal texts") and "Code général des CTD" in out
     assert "Never answer in French" in orchestrator.SYSTEM_EN
+
+
+def test_reponse_francaise_traduite_quand_l_interface_est_en_anglais(monkeypatch, no_kb):
+    from app import langue
+    reponse_fr = AIMessage(content="La compétence pour organiser le transport urbain est attribuée à la communauté urbaine et aux communes, qui sont responsables des lignes.")
+    traduction = AIMessage(content="Urban transport is organised by the urban community and the municipalities, which are responsible for the lines.")
+    fake = FakeLLM([reponse_fr, traduction])
+    monkeypatch.setattr(llm, "get_llm", lambda json_mode=False: fake)
+    jeton = langue.LANGUE.set("en")
+    try:
+        ans = orchestrator.ask("Who is in charge of organising urban transport?")
+    finally:
+        langue.LANGUE.reset(jeton)
+    assert ans.reponse.startswith("Urban transport is organised")
+    assert not orchestrator.semble_francais("The most saturated zone is Yaoundé II with an index of 96 out of 100.")

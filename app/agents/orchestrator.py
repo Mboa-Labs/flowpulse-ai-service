@@ -6,6 +6,7 @@ jusqu'à pouvoir répondre. Chaque étape est tracée ; les recommandations cré
 
 from __future__ import annotations
 
+import re
 import time
 from dataclasses import dataclass, field
 
@@ -75,6 +76,31 @@ def ask(question: str) -> AssistantAnswer:
 
     text = reply.content if reply is not None and reply.content else langue.tr("Je n'ai pas pu conclure en un nombre raisonnable d'étapes. Reformulez la demande ou précisez la zone.",
                      "I could not reach a conclusion in a reasonable number of steps. Rephrase the request or specify the zone.")
+    if langue.actuelle() == "en" and semble_francais(text):
+        text = traduire_en_anglais(text)
     citations = [s for step in trace.etapes for s in step.sources]
     new_recos = [rid for rid in store.RECOMMENDATIONS if rid not in before]
     return AssistantAnswer(text, trace.id, called, new_recos, citations)
+
+
+MOTS_FRANCAIS = re.compile(r"\b(le|la|les|des|du|est|sont|qui|pour|dans|avec|une|aux|cette|leur)\b", re.I)
+
+
+def semble_francais(texte: str) -> bool:
+    """Le petit modèle répond parfois dans la langue des extraits (français) malgré la consigne."""
+    mots = re.findall(r"[A-Za-zÀ-ÿ']+", texte)
+    return len(mots) >= 8 and len(MOTS_FRANCAIS.findall(texte)) / len(mots) > 0.08
+
+
+def traduire_en_anglais(texte: str) -> str:
+    """Dernière passe : traduction fidèle de la réponse en anglais (noms propres et titres de lois conservés)."""
+    started = time.perf_counter()
+    try:
+        out = llm.get_llm().invoke(
+            "Translate the following answer into clear English. Keep the structure, the figures, the names of places and "
+            "the titles of laws and documents as they are. Return only the translation.\n\n" + texte).content.strip()
+    except Exception as e:  # modèle indisponible : on garde la réponse d'origine
+        store.record("orchestrator", "traduction", "fr -> en", f"échec : {e}", started)
+        return texte
+    store.record("orchestrator", "traduction", "fr -> en", "réponse traduite en anglais", started)
+    return out or texte
